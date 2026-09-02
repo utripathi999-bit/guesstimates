@@ -5,13 +5,14 @@ import { Bookmark, BookmarkCheck, CheckCircle2, Globe2, MapPin, Sparkles } from 
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { AuthModal } from '@/components/AuthModal';
+import { useAuth } from '@/components/AuthProvider';
 import { ClarifyingQuestions } from '@/components/ClarifyingQuestions';
 import { Scratchpad } from '@/components/Scratchpad';
 import { SolutionViewer } from '@/components/SolutionViewer';
 import { StreakCelebration } from '@/components/StreakCelebration';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { getAnonymousUserId } from '@/lib/anonymousUser';
 import { getGuesstimateById } from '@/lib/dailyPicker';
 import { markQuestionCompleted, markQuestionInProgress, toggleBookmark, useStreakData } from '@/lib/streakStorage';
 
@@ -20,9 +21,13 @@ export default function GuesstimatePage() {
   const router = useRouter();
   const guesstimate = getGuesstimateById(params.id);
   const streak = useStreakData();
+  const { account } = useAuth();
 
   const [revealed, setRevealed] = useState(false);
-  const [celebration, setCelebration] = useState<{ streak: number; freezeUsed: boolean } | null>(null);
+  const [celebration, setCelebration] = useState<{ streak: number; freezeUsed: boolean; needsSignIn: boolean } | null>(
+    null
+  );
+  const [authPromptOpen, setAuthPromptOpen] = useState(false);
 
   const bookmarked = guesstimate ? streak.bookmarkedIds.includes(guesstimate.id) : false;
   const status = useMemo(() => {
@@ -60,14 +65,16 @@ export default function GuesstimatePage() {
     if (!guesstimate) return;
     const result = markQuestionCompleted(guesstimate.id);
     if (result.dailyGoalJustCompleted) {
-      setCelebration({ streak: result.data.currentStreak, freezeUsed: result.freezeUsed });
-      fetch('/api/leaderboard', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: getAnonymousUserId(), streak: result.data.currentStreak }),
-      }).catch(() => {
-        // Leaderboard sync is best-effort — the local streak already saved regardless.
-      });
+      setCelebration({ streak: result.data.currentStreak, freezeUsed: result.freezeUsed, needsSignIn: !account });
+      if (account) {
+        fetch('/api/leaderboard', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ streak: result.data.currentStreak }),
+        }).catch(() => {
+          // Leaderboard sync is best-effort — the local streak already saved regardless.
+        });
+      }
     }
   }
 
@@ -151,7 +158,13 @@ export default function GuesstimatePage() {
         onClose={() => setCelebration(null)}
         streak={celebration?.streak ?? 0}
         freezeUsed={celebration?.freezeUsed ?? false}
+        needsSignIn={celebration?.needsSignIn ?? false}
+        onSignInClick={() => {
+          setCelebration(null);
+          setAuthPromptOpen(true);
+        }}
       />
+      <AuthModal open={authPromptOpen} onClose={() => setAuthPromptOpen(false)} />
     </main>
   );
 }

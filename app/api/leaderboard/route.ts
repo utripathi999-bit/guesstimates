@@ -1,19 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { getSessionAccount } from '@/lib/auth';
 import { recordUserCompletion, removeUserFromLeaderboard } from '@/lib/leaderboard';
 
 export const dynamic = 'force-dynamic';
 
 const RecordCompletionZ = z.object({
-  userId: z.string().min(1).max(60),
   streak: z.number().int().min(0),
 });
 
 const DeleteEntryZ = z.object({
-  userId: z.string().min(1).max(60),
+  email: z.string().trim().email(),
 });
 
+/**
+ * Records the CURRENTLY SIGNED-IN account's streak. Identity comes from the
+ * session cookie, never from the request body — otherwise any caller could
+ * post scores under someone else's name.
+ */
 export async function POST(request: NextRequest) {
+  const account = await getSessionAccount(request);
+  if (!account) {
+    return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -27,7 +37,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await recordUserCompletion(validation.data.userId, validation.data.streak);
+    await recordUserCompletion(account.email, validation.data.streak);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('leaderboard record failed:', error);
@@ -58,7 +68,7 @@ export async function DELETE(request: NextRequest) {
   }
 
   try {
-    await removeUserFromLeaderboard(validation.data.userId);
+    await removeUserFromLeaderboard(validation.data.email.trim().toLowerCase());
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('leaderboard delete failed:', error);

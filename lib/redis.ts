@@ -44,6 +44,12 @@ export const KEYS = {
 
   /** Sorted set: member = userId, score = currentStreak. */
   leaderboardStreaks: 'leaderboard:streaks' as const,
+
+  /** Hash of one account's auth + profile data, keyed by normalized (lowercased) email. */
+  account: (normalizedEmail: string): string => `auth:account:${normalizedEmail}`,
+
+  /** String value (the account's normalized email) for a live session token. */
+  session: (token: string): string => `auth:session:${token}`,
 } as const;
 
 export type RedisKeys = typeof KEYS;

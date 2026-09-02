@@ -1,8 +1,11 @@
 'use client';
 
-import { Flame, LayoutGrid, ListChecks, Sparkles, Trophy } from 'lucide-react';
+import { Flame, LayoutGrid, ListChecks, LogOut, Sparkles, Trophy, User } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useState } from 'react';
+import { AuthModal } from '@/components/AuthModal';
+import { useAuth } from '@/components/AuthProvider';
 import { useStreakData } from '@/lib/streakStorage';
 
 const NAV_LINKS = [
@@ -15,6 +18,8 @@ const NAV_LINKS = [
 export function Navbar() {
   const pathname = usePathname();
   const { currentStreak, xp } = useStreakData();
+  const { account, loading, logout } = useAuth();
+  const [authModalOpen, setAuthModalOpen] = useState(false);
 
   return (
     <header className="sticky top-0 z-40 bg-surface/90 shadow-card backdrop-blur-md">
@@ -52,12 +57,41 @@ export function Navbar() {
             />
             <span className="tabular-nums">{currentStreak}</span>
           </div>
-          <div className="flex items-center gap-1 rounded-full bg-gradient-to-br from-[#aee6fd] to-[#7ed2fb] px-3 py-1.5 font-black text-action-dark shadow-[0_3px_8px_-2px_hsl(199_96%_50%/0.4)]">
+          <div className="hidden items-center gap-1 rounded-full bg-gradient-to-br from-[#aee6fd] to-[#7ed2fb] px-3 py-1.5 font-black text-action-dark shadow-[0_3px_8px_-2px_hsl(199_96%_50%/0.4)] sm:flex">
             <Sparkles className="h-5 w-5" strokeWidth={2.5} />
             <span className="tabular-nums">{xp}</span>
           </div>
+
+          {!loading && (
+            <>
+              {account ? (
+                <div className="flex items-center gap-1 rounded-full bg-[#e3f8cc] pl-3 pr-1.5 py-1.5">
+                  <User className="h-4 w-4 text-primary-dark" strokeWidth={2.5} />
+                  <span className="hidden max-w-[9rem] truncate text-sm font-black text-primary-dark sm:inline">
+                    {account.displayName}
+                  </span>
+                  <button
+                    onClick={logout}
+                    aria-label="Sign out"
+                    className="rounded-full p-1.5 text-primary-dark/70 hover:bg-black/5 hover:text-primary-dark"
+                  >
+                    <LogOut className="h-3.5 w-3.5" strokeWidth={2.5} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setAuthModalOpen(true)}
+                  className="rounded-full bg-action px-3.5 py-2 text-sm font-black text-white shadow-[0_3px_8px_-2px_hsl(199_96%_50%/0.5)] transition-transform hover:-translate-y-0.5"
+                >
+                  Sign In
+                </button>
+              )}
+            </>
+          )}
         </div>
       </div>
+
+      <AuthModal open={authModalOpen} onClose={() => setAuthModalOpen(false)} />
     </header>
   );
 }

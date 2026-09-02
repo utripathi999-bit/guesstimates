@@ -1,7 +1,7 @@
 'use client';
 
 import confetti from 'canvas-confetti';
-import { Flame, Snowflake } from 'lucide-react';
+import { Flame, LogIn, Snowflake } from 'lucide-react';
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -11,6 +11,8 @@ interface StreakCelebrationProps {
   onClose: () => void;
   streak: number;
   freezeUsed?: boolean;
+  needsSignIn?: boolean;
+  onSignInClick?: () => void;
 }
 
 function fireConfetti() {
@@ -29,7 +31,7 @@ function fireConfetti() {
   }, 200);
 }
 
-export function StreakCelebration({ open, onClose, streak, freezeUsed }: StreakCelebrationProps) {
+export function StreakCelebration({ open, onClose, streak, freezeUsed, needsSignIn, onSignInClick }: StreakCelebrationProps) {
   useEffect(() => {
     if (open) fireConfetti();
   }, [open]);
@@ -51,6 +53,16 @@ export function StreakCelebration({ open, onClose, streak, freezeUsed }: StreakC
             <Snowflake className="h-4 w-4" strokeWidth={2.5} />
             A streak freeze saved yesterday&apos;s gap!
           </div>
+        )}
+
+        {needsSignIn && (
+          <button
+            onClick={onSignInClick}
+            className="shadow-card flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[#fffbf0] to-[#fff4cc] px-3 py-2.5 text-sm font-bold text-accent-dark"
+          >
+            <LogIn className="h-4 w-4" strokeWidth={2.5} />
+            Sign in to save this streak to the leaderboard
+          </button>
         )}
 
         <Button variant="primary" size="md" onClick={onClose} className="mt-2 w-full">

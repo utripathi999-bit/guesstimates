@@ -23,7 +23,7 @@ export function Navbar() {
 
   return (
     <header className="sticky top-0 z-40 bg-surface/90 shadow-card backdrop-blur-md">
-      <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3">
+      <div className="mx-auto flex min-h-[var(--navbar-height)] max-w-5xl items-center justify-between gap-4 px-4 py-3">
         <Link href="/" className="flex items-center gap-2.5 text-xl font-black tracking-tight text-primary-dark">
           <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary-dark text-lg shadow-[0_4px_10px_-3px_hsl(96_100%_35%/0.55)]">
             🎯

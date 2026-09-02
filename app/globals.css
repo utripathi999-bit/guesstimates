@@ -21,6 +21,11 @@
   --surface-border: #ece7db;
   --text-muted: #767268;
 
+  /* Single source of truth for the sticky navbar's height, so anything that
+     pins itself beneath it (e.g. the question rail) lines up exactly instead
+     of guessing an offset. */
+  --navbar-height: 64px;
+
   --shadow-ambient: 43 30% 20%;
   --shadow-primary: 96 100% 40%;
   --shadow-accent: 45 100% 50%;

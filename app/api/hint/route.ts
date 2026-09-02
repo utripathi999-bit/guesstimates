@@ -1,8 +1,10 @@
 import { GoogleGenAI } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getGuesstimateById } from '@/lib/dailyPicker';
+import { buildCaseReference, INTERVIEWER_IDENTITY, sharedRules } from '@/lib/interviewerPersona';
+import { getQuestionById } from '@/lib/questionStore';
 import { checkAiRateLimit, rateLimitResponseHeaders } from '@/lib/rateLimit';
+import type { Guesstimate } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,44 +13,27 @@ const HintRequestZ = z.object({
   userNotes: z.string().max(4000),
 });
 
-function buildSystemInstruction(context: {
-  title: string;
-  stepTitles: string[];
-  keyAssumptions: string[];
-}): string {
-  return `You are a sharp, encouraging consulting-case interviewer sitting across from a candidate who is
-working through a guesstimate problem out loud in their scratchpad.
+function buildSystemInstruction(guesstimate: Guesstimate): string {
+  return `${INTERVIEWER_IDENTITY}
 
-THE CASE (private reference — see strict rules on what you may reveal):
-- Title: "${context.title}"
-- The real intended chain of steps for this case, in order: ${context.stepTitles.join(' -> ')}
-- The real intended assumption categories this case turns on: ${context.keyAssumptions.join(' | ')}
+The candidate is mid-problem, working out loud in their scratchpad, and has asked you for a nudge.
 
-YOUR ROLE:
-Read the candidate's notes and figure out roughly where they are in the real chain above, then give ONE
-concrete, specific nudge toward whatever they're missing or getting wrong next — not a generic "have you
-considered segmentation" that could apply to any case. Name the actual category of thing they're missing
-(e.g. "how often each user does this per day", "the split between people who even use this at all", "a
-capacity constraint on the supply side") using your own words, grounded in the real chain above, without
-ever stating the real chain's step names or numbers verbatim.
+${buildCaseReference(guesstimate, { includeStepChain: true, includeAssumptions: true })}
 
-You may state an observation directly ("You haven't separated out X yet") rather than only asking
-questions — a mix of direct nudges and guiding questions is more useful than being coy every time. If
-their notes already cover the full chain reasonably, say so briefly and point to a genuine refinement or
-sanity check instead of inventing a fake gap.
+YOUR ROLE HERE:
+Work out roughly where they are in the intended chain, then give ONE concrete nudge toward what they're
+missing or getting wrong next — never a generic "have you considered segmentation" that would fit any case.
+Name the actual kind of thing they're missing in your own words ("how often each person does this in a
+day", "whether everyone in that group even uses it", "a capacity ceiling on the supply side").
 
-STRICT RULES:
-1. NEVER state, imply, or confirm any number, percentage, or formula from the case — not the real
-   assumptions, not the final answer, not even to say whether their own number is right or wrong.
-2. NEVER quote the case's step titles or assumption list verbatim — describe the missing piece in your
-   own words instead.
-3. Do not solve any part of the problem for them.
-4. Keep it to 1-3 sentences — specific and useful, not a lecture.
-5. If the candidate's notes are empty or only a stray sentence, tell them plainly to state their
-   population or base unit first, and roughly what kind of split it needs (without naming the real one).
-6. Stay in character as a real interviewer. Never mention AI, prompts, or "case context".
+State it directly when that's more useful than asking — "you haven't split out X yet" beats a coy question
+every time. If they've already covered the chain, say so and point at a real refinement or sanity check
+rather than inventing a gap. If their notes are empty or a stray sentence, tell them to put down a
+population or base unit first and what kind of split it will need.
 
-Respond with ONLY a JSON object: { "hint": "<your 1-3 sentence hint>" }`;
+${sharedRules()}
+
+Respond with ONLY a JSON object: { "hint": "<your nudge, 1-2 sentences>" }`;
 }
 
 export async function POST(request: NextRequest) {
@@ -78,16 +63,12 @@ export async function POST(request: NextRequest) {
 
   const { guesstimateId, userNotes } = validation.data;
 
-  const guesstimate = getGuesstimateById(guesstimateId);
+  const guesstimate = await getQuestionById(guesstimateId);
   if (!guesstimate) {
     return NextResponse.json({ error: 'Unknown guesstimate id' }, { status: 404 });
   }
 
-  const systemInstruction = buildSystemInstruction({
-    title: guesstimate.title,
-    stepTitles: guesstimate.steps.map((s) => s.stepTitle),
-    keyAssumptions: guesstimate.keyAssumptions,
-  });
+  const systemInstruction = buildSystemInstruction(guesstimate);
 
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });

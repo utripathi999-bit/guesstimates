@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { getDailyGuesstimateIds, getLocalDateString } from '@/lib/dailyPicker';
+import { getLocalDateString } from '@/lib/dailyPicker';
 import type { QuestionStatus, StreakData } from '@/lib/types';
 
 const STORAGE_KEY = 'guesstimateDaily:v1';
@@ -70,8 +70,11 @@ export interface CompletionResult {
  * Marks a question completed, awards question XP, and — if this completes
  * both of today's daily questions for the first time — advances the streak,
  * consuming a freeze automatically if exactly one day was missed.
+ *
+ * `todaysIds` is passed in rather than derived here: today's pair may be
+ * AI-generated and resolved server-side, so the client can't compute it.
  */
-export function markQuestionCompleted(questionId: string): CompletionResult {
+export function markQuestionCompleted(questionId: string, todaysIds: string[]): CompletionResult {
   const data = getStreakData();
   const today = getLocalDateString();
 
@@ -87,8 +90,7 @@ export function markQuestionCompleted(questionId: string): CompletionResult {
   let streakIncreased = false;
   let freezeUsed = false;
 
-  const todaysIds = getDailyGuesstimateIds(new Date());
-  const bothTodaysDone = todaysIds.every((id) => data.completedQuestionIds.includes(id));
+  const bothTodaysDone = todaysIds.length > 0 && todaysIds.every((id) => data.completedQuestionIds.includes(id));
   const alreadyCountedToday = data.lastCompletedDate === today;
 
   if (bothTodaysDone && !alreadyCountedToday) {
@@ -173,15 +175,6 @@ export function setFlashcardMastery(factId: string, status: 'known' | 'revision'
 
 export function getFlashcardMastery(factId: string): 'known' | 'revision' | undefined {
   return getStreakData().flashcardMastery[factId];
-}
-
-/** Whether the streak is "at risk" — both daily questions are still incomplete and it's not a fresh streak of 0. */
-export function isStreakAtRisk(): boolean {
-  const data = getStreakData();
-  const today = getLocalDateString();
-  if (data.currentStreak === 0 || data.lastCompletedDate === today) return false;
-  const todaysIds = getDailyGuesstimateIds(new Date());
-  return !todaysIds.every((id) => data.completedQuestionIds.includes(id));
 }
 
 // --- React binding -----------------------------------------------------

@@ -39,6 +39,9 @@ export const KEYS = {
   /** List of all guesstimate ids ever generated, newest first. */
   archive: 'guesstimates:archive' as const,
 
+  /** A single AI-generated guesstimate, stored by id so it stays resolvable after its day passes. */
+  question: (id: string): string => `guesstimates:item:${id}`,
+
   /** Hash of a single user's streak state. e.g. user:abc123:streak */
   userStreak: (userId: string): string => `user:${userId}:streak`,
 

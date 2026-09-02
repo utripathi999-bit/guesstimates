@@ -20,6 +20,7 @@ import { StreakCelebration } from '@/components/StreakCelebration';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { getAnonymousUserId } from '@/lib/anonymousUser';
 import { getGuesstimateById } from '@/lib/dailyPicker';
 import { markQuestionCompleted, markQuestionInProgress, toggleBookmark, useStreakData } from '@/lib/streakStorage';
 
@@ -70,6 +71,13 @@ export default function GuesstimatePage() {
     const result = markQuestionCompleted(guesstimate.id);
     if (result.dailyGoalJustCompleted) {
       setCelebration({ streak: result.data.currentStreak, freezeUsed: result.freezeUsed });
+      fetch('/api/leaderboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: getAnonymousUserId(), streak: result.data.currentStreak }),
+      }).catch(() => {
+        // Leaderboard sync is best-effort — the local streak already saved regardless.
+      });
     }
   }
 

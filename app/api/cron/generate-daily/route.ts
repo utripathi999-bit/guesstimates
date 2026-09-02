@@ -80,9 +80,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: true, date: today, questionIds: dailyPair.map((q) => q.id) });
   } catch (error) {
     console.error('generate-daily cron failed:', error);
-    return NextResponse.json(
-      { error: 'Failed to generate daily guesstimates', debug: error instanceof Error ? error.message : String(error) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to generate daily guesstimates' }, { status: 500 });
   }
 }

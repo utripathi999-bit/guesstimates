@@ -22,9 +22,26 @@ function hashString(input: string): number {
 }
 
 /**
- * Fallback pair for a given date, used when no AI-generated set exists for it:
- * one India-region question and one Global, deterministic so the same date
- * always yields the same pair.
+ * How often a Global question appears at all. Two questions a day, one Global
+ * every 10th day, works out to ~5% of everything served — the rest is India
+ * context, which is what the audience is actually preparing for.
+ */
+export const GLOBAL_QUESTION_DAY_INTERVAL = 10;
+
+/**
+ * Deterministic (not random) so the schedule is predictable and testable, and
+ * so the AI generator and the static fallback always agree on whether a given
+ * day is a Global day.
+ */
+export function isGlobalQuestionDay(dateStr: string): boolean {
+  const daysSinceEpoch = Math.floor(new Date(`${dateStr}T00:00:00Z`).getTime() / 86_400_000);
+  return daysSinceEpoch % GLOBAL_QUESTION_DAY_INTERVAL === 0;
+}
+
+/**
+ * Fallback pair for a given date, used when no AI-generated set exists for it.
+ * Deterministic, so the same date always yields the same pair. Normally two
+ * India questions; one of them is Global only on a Global day.
  */
 export function pickDeterministicPair(dateStr: string): [Guesstimate, Guesstimate] {
   const seed = hashString(dateStr);
@@ -32,7 +49,15 @@ export function pickDeterministicPair(dateStr: string): [Guesstimate, Guesstimat
   const indiaPool = guesstimates.filter((g) => g.region === 'India');
   const globalPool = guesstimates.filter((g) => g.region === 'Global');
 
-  return [indiaPool[seed % indiaPool.length], globalPool[Math.floor(seed / 7) % globalPool.length]];
+  const firstIndia = indiaPool[seed % indiaPool.length];
+
+  if (isGlobalQuestionDay(dateStr) && globalPool.length > 0) {
+    return [firstIndia, globalPool[Math.floor(seed / 7) % globalPool.length]];
+  }
+
+  // Two India questions — offset by a coprime stride so the second is never the first.
+  const secondIndex = (seed % indiaPool.length + 1 + (Math.floor(seed / 7) % (indiaPool.length - 1))) % indiaPool.length;
+  return [firstIndia, indiaPool[secondIndex]];
 }
 
 /** Static-only lookup. Prefer questionStore.getQuestionById, which also resolves AI-generated questions. */

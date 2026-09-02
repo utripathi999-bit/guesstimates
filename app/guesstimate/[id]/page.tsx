@@ -116,7 +116,7 @@ export default function GuesstimatePage() {
       <ClarifyingQuestions guesstimateId={guesstimate.id} suggestedQuestions={guesstimate.clarifyingQuestions} />
 
       <div className="mb-6">
-        <Scratchpad questionId={guesstimate.id} questionTitle={guesstimate.title} />
+        <Scratchpad questionId={guesstimate.id} />
       </div>
 
       {!revealed && (

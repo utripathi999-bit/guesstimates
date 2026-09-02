@@ -7,7 +7,6 @@ import { getScratchpadNote, saveScratchpadNote } from '@/lib/streakStorage';
 
 interface ScratchpadProps {
   questionId: string;
-  questionTitle: string;
 }
 
 interface Feedback {
@@ -15,7 +14,7 @@ interface Feedback {
   gaps: string[];
 }
 
-export function Scratchpad({ questionId, questionTitle }: ScratchpadProps) {
+export function Scratchpad({ questionId }: ScratchpadProps) {
   const [notes, setNotes] = useState('');
   const [hint, setHint] = useState<string | null>(null);
   const [hintLoading, setHintLoading] = useState(false);
@@ -48,7 +47,7 @@ export function Scratchpad({ questionId, questionTitle }: ScratchpadProps) {
       const res = await fetch('/api/hint', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ questionTitle, userNotes: notes }),
+        body: JSON.stringify({ guesstimateId: questionId, userNotes: notes }),
       });
       if (!res.ok) throw new Error('Hint service unavailable');
       const data: { hint?: string } = await res.json();
@@ -115,8 +114,8 @@ export function Scratchpad({ questionId, questionTitle }: ScratchpadProps) {
         </Button>
       </div>
       <p className="mt-2 text-xs text-text-muted">
-        Hints nudge you while you&apos;re stuck — they never look at your notes closely. Feedback critiques what
-        you&apos;ve actually written, without revealing the real numbers.
+        A hint nudges you toward the next specific thing to consider. Feedback critiques the full approach
+        you&apos;ve written so far. Neither ever reveals the real numbers.
       </p>
 
       {hint && (

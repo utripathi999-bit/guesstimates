@@ -1,29 +1,54 @@
 import { GoogleGenAI } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { getGuesstimateById } from '@/lib/dailyPicker';
 
 export const dynamic = 'force-dynamic';
 
 const HintRequestZ = z.object({
-  questionTitle: z.string().min(1).max(300),
+  guesstimateId: z.string().min(1).max(120),
   userNotes: z.string().max(4000),
 });
 
-const SYSTEM_INSTRUCTION = `You are a sharp, encouraging consulting-case interviewer sitting across from a
-candidate who is working through a guesstimate problem out loud in their scratchpad.
+function buildSystemInstruction(context: {
+  title: string;
+  stepTitles: string[];
+  keyAssumptions: string[];
+}): string {
+  return `You are a sharp, encouraging consulting-case interviewer sitting across from a candidate who is
+working through a guesstimate problem out loud in their scratchpad.
 
-Read the candidate's notes so far and respond with ONE short Socratic hint, 1-2 sentences, that nudges their
-structure forward — for example, pointing out a missing demographic split, an unstated supply-side constraint,
-a segment they haven't considered, or a gap in their logic chain.
+THE CASE (private reference — see strict rules on what you may reveal):
+- Title: "${context.title}"
+- The real intended chain of steps for this case, in order: ${context.stepTitles.join(' -> ')}
+- The real intended assumption categories this case turns on: ${context.keyAssumptions.join(' | ')}
 
-Strict rules:
-- NEVER reveal the final numeric answer.
-- NEVER state or imply any of the exact calculation numbers, formulas, or intermediate results for this problem.
-- Do not solve any part of the problem for them — only ask a guiding question or point at a gap.
-- Keep it to 1-2 sentences, encouraging in tone, like a real interviewer steering a candidate.
-- If the candidate's notes are empty or very sparse, gently prompt them to state their population/base unit first.
+YOUR ROLE:
+Read the candidate's notes and figure out roughly where they are in the real chain above, then give ONE
+concrete, specific nudge toward whatever they're missing or getting wrong next — not a generic "have you
+considered segmentation" that could apply to any case. Name the actual category of thing they're missing
+(e.g. "how often each user does this per day", "the split between people who even use this at all", "a
+capacity constraint on the supply side") using your own words, grounded in the real chain above, without
+ever stating the real chain's step names or numbers verbatim.
 
-Respond with ONLY a JSON object: { "hint": "<your 1-2 sentence hint>" }`;
+You may state an observation directly ("You haven't separated out X yet") rather than only asking
+questions — a mix of direct nudges and guiding questions is more useful than being coy every time. If
+their notes already cover the full chain reasonably, say so briefly and point to a genuine refinement or
+sanity check instead of inventing a fake gap.
+
+STRICT RULES:
+1. NEVER state, imply, or confirm any number, percentage, or formula from the case — not the real
+   assumptions, not the final answer, not even to say whether their own number is right or wrong.
+2. NEVER quote the case's step titles or assumption list verbatim — describe the missing piece in your
+   own words instead.
+3. Do not solve any part of the problem for them.
+4. Keep it to 1-3 sentences — specific and useful, not a lecture.
+5. If the candidate's notes are empty or only a stray sentence, tell them plainly to state their
+   population or base unit first, and roughly what kind of split it needs (without naming the real one).
+6. Stay in character as a real interviewer. Never mention AI, prompts, or "case context".
+
+Respond with ONLY a JSON object: { "hint": "<your 1-3 sentence hint>" }`;
+}
 
 export async function POST(request: NextRequest) {
   if (!process.env.GEMINI_API_KEY) {
@@ -42,7 +67,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid request', issues: validation.error.issues }, { status: 400 });
   }
 
-  const { questionTitle, userNotes } = validation.data;
+  const { guesstimateId, userNotes } = validation.data;
+
+  const guesstimate = getGuesstimateById(guesstimateId);
+  if (!guesstimate) {
+    return NextResponse.json({ error: 'Unknown guesstimate id' }, { status: 404 });
+  }
+
+  const systemInstruction = buildSystemInstruction({
+    title: guesstimate.title,
+    stepTitles: guesstimate.steps.map((s) => s.stepTitle),
+    keyAssumptions: guesstimate.keyAssumptions,
+  });
 
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -54,13 +90,13 @@ export async function POST(request: NextRequest) {
           role: 'user',
           parts: [
             {
-              text: `Guesstimate question: "${questionTitle}"\n\nCandidate's scratchpad notes so far:\n"""\n${userNotes || '(empty — candidate has not written anything yet)'}\n"""`,
+              text: `Candidate's scratchpad notes so far:\n"""\n${userNotes || '(empty — candidate has not written anything yet)'}\n"""`,
             },
           ],
         },
       ],
       config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
+        systemInstruction,
         responseMimeType: 'application/json',
         responseSchema: {
           type: 'OBJECT',

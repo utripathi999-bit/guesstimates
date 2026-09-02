@@ -1,6 +1,6 @@
 'use client';
 
-import { Lightbulb, Loader2, PenLine } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ClipboardCheck, Lightbulb, Loader2, PenLine } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { getScratchpadNote, saveScratchpadNote } from '@/lib/streakStorage';
@@ -10,11 +10,19 @@ interface ScratchpadProps {
   questionTitle: string;
 }
 
+interface Feedback {
+  strengths: string[];
+  gaps: string[];
+}
+
 export function Scratchpad({ questionId, questionTitle }: ScratchpadProps) {
   const [notes, setNotes] = useState('');
   const [hint, setHint] = useState<string | null>(null);
   const [hintLoading, setHintLoading] = useState(false);
   const [hintError, setHintError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -52,6 +60,27 @@ export function Scratchpad({ questionId, questionTitle }: ScratchpadProps) {
     }
   }
 
+  async function handleGetFeedback() {
+    setFeedbackLoading(true);
+    setFeedbackError(null);
+    try {
+      const res = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ guesstimateId: questionId, userNotes: notes }),
+      });
+      if (!res.ok) throw new Error('Feedback service unavailable');
+      const data: Feedback = await res.json();
+      setFeedback(data);
+    } catch {
+      setFeedbackError("Couldn't get feedback right now — try again in a moment.");
+    } finally {
+      setFeedbackLoading(false);
+    }
+  }
+
+  const notesEmpty = notes.trim().length === 0;
+
   return (
     <div className="shadow-card rounded-2xl bg-surface p-5">
       <div className="mb-3 flex items-center gap-2 font-black text-foreground">
@@ -73,8 +102,22 @@ export function Scratchpad({ questionId, questionTitle }: ScratchpadProps) {
           {hintLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lightbulb className="h-4 w-4" />}
           Get a Hint
         </Button>
-        <span className="text-xs text-text-muted">Hints nudge your structure — they never reveal the answer.</span>
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={handleGetFeedback}
+          disabled={feedbackLoading || notesEmpty}
+          type="button"
+          title={notesEmpty ? 'Write your approach first' : undefined}
+        >
+          {feedbackLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardCheck className="h-4 w-4" />}
+          Get Feedback
+        </Button>
       </div>
+      <p className="mt-2 text-xs text-text-muted">
+        Hints nudge you while you&apos;re stuck — they never look at your notes closely. Feedback critiques what
+        you&apos;ve actually written, without revealing the real numbers.
+      </p>
 
       {hint && (
         <div className="animate-slide-up shadow-card mt-3 flex gap-2 rounded-xl bg-gradient-to-br from-[#fff9e6] to-[#fff0c2] p-3 text-sm text-[#7a5b00]">
@@ -85,6 +128,36 @@ export function Scratchpad({ questionId, questionTitle }: ScratchpadProps) {
       {hintError && (
         <div className="animate-slide-up shadow-card mt-3 rounded-xl bg-[#fff0f0] p-3 text-sm text-danger-dark">
           {hintError}
+        </div>
+      )}
+
+      {feedback && (
+        <div className="animate-slide-up mt-3 flex flex-col gap-2">
+          {feedback.strengths.length > 0 && (
+            <div className="shadow-card flex flex-col gap-1.5 rounded-xl bg-gradient-to-br from-[#f0fdf6] to-[#e3f8cc] p-3 text-sm text-factual-dark">
+              {feedback.strengths.map((s, i) => (
+                <div key={i} className="flex items-start gap-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 translate-y-0.5" strokeWidth={2.5} />
+                  <p>{s}</p>
+                </div>
+              ))}
+            </div>
+          )}
+          {feedback.gaps.length > 0 && (
+            <div className="shadow-card flex flex-col gap-1.5 rounded-xl bg-gradient-to-br from-[#fff0f0] to-[#ffe0e0] p-3 text-sm text-danger-dark">
+              {feedback.gaps.map((g, i) => (
+                <div key={i} className="flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0 translate-y-0.5" strokeWidth={2.5} />
+                  <p>{g}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {feedbackError && (
+        <div className="animate-slide-up shadow-card mt-3 rounded-xl bg-[#fff0f0] p-3 text-sm text-danger-dark">
+          {feedbackError}
         </div>
       )}
     </div>

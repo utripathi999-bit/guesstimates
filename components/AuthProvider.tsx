@@ -71,6 +71,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // Deliberate effect: the session cookie can only be checked via a network
+    // round-trip (no client-computable/derivable value), so "fetch on mount,
+    // setState with the result" is the standard pattern here absent a data
+    // library like SWR/React Query.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();
   }, [refresh]);
 

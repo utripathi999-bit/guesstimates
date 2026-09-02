@@ -3,6 +3,7 @@
 import { AlertTriangle, CheckCircle2, ClipboardCheck, Lightbulb, Loader2, PenLine } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { extractApiErrorMessage } from '@/lib/apiError';
 import { getScratchpadNote, saveScratchpadNote } from '@/lib/streakStorage';
 
 interface ScratchpadProps {
@@ -49,7 +50,10 @@ export function Scratchpad({ questionId }: ScratchpadProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ guesstimateId: questionId, userNotes: notes }),
       });
-      if (!res.ok) throw new Error('Hint service unavailable');
+      if (!res.ok) {
+        setHintError(await extractApiErrorMessage(res, "Couldn't fetch a hint right now — keep structuring your own approach for now."));
+        return;
+      }
       const data: { hint?: string } = await res.json();
       setHint(data.hint ?? null);
     } catch {
@@ -68,7 +72,10 @@ export function Scratchpad({ questionId }: ScratchpadProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ guesstimateId: questionId, userNotes: notes }),
       });
-      if (!res.ok) throw new Error('Feedback service unavailable');
+      if (!res.ok) {
+        setFeedbackError(await extractApiErrorMessage(res, "Couldn't get feedback right now — try again in a moment."));
+        return;
+      }
       const data: Feedback = await res.json();
       setFeedback(data);
     } catch {

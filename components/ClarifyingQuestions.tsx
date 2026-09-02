@@ -3,6 +3,7 @@
 import { ChevronDown, HelpCircle, Loader2, MessageCircleQuestion, Send } from 'lucide-react';
 import { useState } from 'react';
 import { Card } from '@/components/ui/Card';
+import { extractApiErrorMessage } from '@/lib/apiError';
 
 interface ClarifyingQuestionsProps {
   guesstimateId: string;
@@ -13,7 +14,16 @@ interface ThreadEntry {
   id: string;
   question: string;
   answer?: string;
+  errorMessage?: string;
   status: 'loading' | 'done' | 'error';
+}
+
+// Module scope, not component scope: React Compiler's purity check flags
+// Date.now()/Math.random() calls written anywhere lexically inside a
+// component body, even nested in an event handler that only ever runs from
+// a click — pulling id generation out here sidesteps that entirely.
+function generateThreadEntryId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export function ClarifyingQuestions({ guesstimateId, suggestedQuestions }: ClarifyingQuestionsProps) {
@@ -28,7 +38,7 @@ export function ClarifyingQuestions({ guesstimateId, suggestedQuestions }: Clari
     const trimmed = question.trim();
     if (!trimmed || asking) return;
 
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const id = generateThreadEntryId();
     const history = thread.filter((t) => t.status === 'done').map((t) => ({ question: t.question, answer: t.answer ?? '' }));
 
     setThread((prev) => [...prev, { id, question: trimmed, status: 'loading' }]);
@@ -41,7 +51,11 @@ export function ClarifyingQuestions({ guesstimateId, suggestedQuestions }: Clari
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ guesstimateId, question: trimmed, history }),
       });
-      if (!res.ok) throw new Error('request failed');
+      if (!res.ok) {
+        const errorMessage = await extractApiErrorMessage(res, "Couldn't reach the interviewer — try again.");
+        setThread((prev) => prev.map((t) => (t.id === id ? { ...t, status: 'error', errorMessage } : t)));
+        return;
+      }
       const data: { answer?: string } = await res.json();
       setThread((prev) =>
         prev.map((t) => (t.id === id ? { ...t, answer: data.answer ?? "I don't have an answer for that.", status: 'done' } : t))
@@ -107,7 +121,9 @@ export function ClarifyingQuestions({ guesstimateId, suggestedQuestions }: Clari
                     )}
                     {t.status === 'done' && <p className="text-sm text-foreground">{t.answer}</p>}
                     {t.status === 'error' && (
-                      <p className="text-sm text-danger-dark">Couldn&apos;t reach the interviewer — try again.</p>
+                      <p className="text-sm text-danger-dark">
+                        {t.errorMessage ?? "Couldn't reach the interviewer — try again."}
+                      </p>
                     )}
                   </div>
                 </div>

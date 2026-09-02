@@ -2,6 +2,7 @@ import { GoogleGenAI } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getGuesstimateById } from '@/lib/dailyPicker';
+import { checkAiRateLimit, rateLimitResponseHeaders } from '@/lib/rateLimit';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,6 +54,14 @@ Respond with ONLY a JSON object: { "hint": "<your 1-3 sentence hint>" }`;
 export async function POST(request: NextRequest) {
   if (!process.env.GEMINI_API_KEY) {
     return NextResponse.json({ error: 'GEMINI_API_KEY is not configured' }, { status: 500 });
+  }
+
+  const rateLimit = await checkAiRateLimit(request);
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests — please wait a bit before asking for another hint.' },
+      { status: 429, headers: rateLimitResponseHeaders(rateLimit) }
+    );
   }
 
   let body: unknown;

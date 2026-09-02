@@ -22,6 +22,18 @@ export async function recordUserCompletion(userId: string, currentStreak: number
 }
 
 /**
+ * Removes a user's entry from the leaderboard and their streak record —
+ * e.g. to clear test/seed data. Admin-only; see the protected DELETE
+ * handler in app/api/leaderboard/route.ts.
+ */
+export async function removeUserFromLeaderboard(userId: string): Promise<void> {
+  const pipeline = getRedis().pipeline();
+  pipeline.zrem(KEYS.leaderboardStreaks, userId);
+  pipeline.del(KEYS.userStreak(userId));
+  await pipeline.exec();
+}
+
+/**
  * Fetches the top 10 users by streak, highest first.
  */
 export async function getTopLeaderboard(): Promise<LeaderboardEntry[]> {

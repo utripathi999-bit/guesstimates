@@ -8,6 +8,10 @@ let cachedClient: Redis | null = null;
  * during build-time page-data collection, which would otherwise throw when
  * UPSTASH_REDIS_REST_URL/TOKEN aren't set in the build environment.
  */
+export function isRedisConfigured(): boolean {
+  return Boolean(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+}
+
 export function getRedis(): Redis {
   if (cachedClient) return cachedClient;
 

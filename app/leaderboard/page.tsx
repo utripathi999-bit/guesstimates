@@ -1,5 +1,6 @@
-import { Flame, Medal, Trophy } from 'lucide-react';
+import { Flame, Medal, Settings, Trophy } from 'lucide-react';
 import { getTopLeaderboard } from '@/lib/leaderboard';
+import { isRedisConfigured } from '@/lib/redis';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +27,8 @@ function RankBadge({ rank }: { rank: number }) {
 }
 
 export default async function LeaderboardPage() {
-  const entries = await getTopLeaderboard();
+  const redisReady = isRedisConfigured();
+  const entries = redisReady ? await getTopLeaderboard() : [];
 
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-10">
@@ -35,7 +37,16 @@ export default async function LeaderboardPage() {
         <p className="mt-1 text-[#777]">Top 10 GuesstimateDaily streaks, right now.</p>
       </div>
 
-      {entries.length === 0 ? (
+      {!redisReady ? (
+        <div className="flex flex-col items-center gap-2 rounded-2xl border-2 border-[#E5E5E5] bg-white p-8 text-center text-[#777]">
+          <Settings className="h-6 w-6" strokeWidth={2.5} />
+          <p className="font-bold text-[#4B4B4B]">Leaderboard isn&apos;t set up yet</p>
+          <p className="text-sm">
+            Add <code className="rounded bg-[#F7F7F7] px-1.5 py-0.5">UPSTASH_REDIS_REST_URL</code> and{' '}
+            <code className="rounded bg-[#F7F7F7] px-1.5 py-0.5">UPSTASH_REDIS_REST_TOKEN</code> to enable it.
+          </p>
+        </div>
+      ) : entries.length === 0 ? (
         <div className="rounded-2xl border-2 border-[#E5E5E5] bg-white p-8 text-center text-[#777]">
           No streaks recorded yet. Be the first to show up on the board.
         </div>

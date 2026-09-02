@@ -2,7 +2,8 @@
 
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 interface ModalProps {
   open: boolean;
@@ -12,7 +13,17 @@ interface ModalProps {
 }
 
 export function Modal({ open, onClose, children, className = '' }: ModalProps) {
-  return (
+  // Portal to document.body: rendering in place would nest the fixed-position
+  // overlay inside the Navbar's <header>, which has backdrop-blur-md —
+  // backdrop-filter (like transform/filter) makes an element a containing
+  // block for `position: fixed` descendants, confining the "fullscreen"
+  // overlay to the header's own small box instead of the viewport.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  if (!mounted) return null;
+
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
@@ -41,6 +52,7 @@ export function Modal({ open, onClose, children, className = '' }: ModalProps) {
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }

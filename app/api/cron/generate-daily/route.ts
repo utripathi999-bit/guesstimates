@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.5-flash',
       contents: SYSTEM_PROMPT,
       config: {
         responseMimeType: 'application/json',
@@ -80,6 +80,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: true, date: today, questionIds: dailyPair.map((q) => q.id) });
   } catch (error) {
     console.error('generate-daily cron failed:', error);
-    return NextResponse.json({ error: 'Failed to generate daily guesstimates' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to generate daily guesstimates', debug: error instanceof Error ? error.message : String(error) },
+      { status: 500 }
+    );
   }
 }

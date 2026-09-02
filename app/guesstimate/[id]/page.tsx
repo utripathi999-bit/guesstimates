@@ -1,25 +1,16 @@
 'use client';
 
 import { AnimatePresence, motion } from 'framer-motion';
-import {
-  Bookmark,
-  BookmarkCheck,
-  CheckCircle2,
-  ChevronDown,
-  Globe2,
-  HelpCircle,
-  MapPin,
-  Sparkles,
-} from 'lucide-react';
+import { Bookmark, BookmarkCheck, CheckCircle2, Globe2, MapPin, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { ClarifyingQuestions } from '@/components/ClarifyingQuestions';
 import { Scratchpad } from '@/components/Scratchpad';
 import { SolutionViewer } from '@/components/SolutionViewer';
 import { StreakCelebration } from '@/components/StreakCelebration';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
 import { getAnonymousUserId } from '@/lib/anonymousUser';
 import { getGuesstimateById } from '@/lib/dailyPicker';
 import { markQuestionCompleted, markQuestionInProgress, toggleBookmark, useStreakData } from '@/lib/streakStorage';
@@ -31,7 +22,6 @@ export default function GuesstimatePage() {
   const streak = useStreakData();
 
   const [revealed, setRevealed] = useState(false);
-  const [clarifyOpen, setClarifyOpen] = useState(true);
   const [celebration, setCelebration] = useState<{ streak: number; freezeUsed: boolean } | null>(null);
 
   const bookmarked = guesstimate ? streak.bookmarkedIds.includes(guesstimate.id) : false;
@@ -116,30 +106,7 @@ export default function GuesstimatePage() {
         </div>
       )}
 
-      <Card className="mb-6">
-        <button
-          onClick={() => setClarifyOpen((o) => !o)}
-          className="flex w-full items-center justify-between gap-3 text-left"
-        >
-          <span className="flex items-center gap-2 font-black text-foreground">
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#d3eefd] text-action-dark">
-              <HelpCircle className="h-4 w-4" strokeWidth={2.5} />
-            </span>
-            Clarifying Questions
-          </span>
-          <ChevronDown className={`h-5 w-5 text-text-muted transition-transform ${clarifyOpen ? 'rotate-180' : ''}`} />
-        </button>
-        {clarifyOpen && (
-          <ul className="animate-slide-up mt-3 flex flex-col gap-2">
-            {guesstimate.clarifyingQuestions.map((q, i) => (
-              <li key={i} className="flex items-start gap-2 rounded-xl bg-background p-3 text-sm text-foreground">
-                <span className="font-black text-action-dark">Q{i + 1}.</span>
-                {q}
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
+      <ClarifyingQuestions guesstimateId={guesstimate.id} suggestedQuestions={guesstimate.clarifyingQuestions} />
 
       <div className="mb-6">
         <Scratchpad questionId={guesstimate.id} questionTitle={guesstimate.title} />

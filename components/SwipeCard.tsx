@@ -48,42 +48,44 @@ export function SwipeCard({ fact, onSwipe, zIndex, isTop }: SwipeCardProps) {
     >
       <div
         onClick={() => setRevealed((r) => !r)}
-        className="flex h-full w-full cursor-grab select-none flex-col justify-between rounded-3xl border-2 border-surface-border bg-surface p-6 shadow-xl active:cursor-grabbing"
+        className="relative flex h-full w-full cursor-grab select-none flex-col justify-between overflow-hidden rounded-3xl bg-surface p-6 shadow-[0_2px_8px_rgba(0,0,0,0.04),0_24px_48px_-16px_rgba(0,0,0,0.18)] active:cursor-grabbing"
       >
-        <div className="flex items-center justify-between">
+        <div className={`absolute inset-x-0 top-0 h-2 bg-gradient-to-r ${fact.region === 'India' ? 'from-primary to-primary-dark' : 'from-action to-action-dark'}`} />
+
+        <div className="flex items-center justify-between pt-1">
           <Badge tone="action">{fact.category}</Badge>
           <Badge tone="neutral">{fact.region}</Badge>
         </div>
 
         <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
-          <p className="text-xl font-extrabold text-foreground">{fact.metric}?</p>
+          <p className="text-xl font-black text-foreground">{fact.metric}?</p>
           {revealed ? (
             <div className="animate-pop flex flex-col items-center gap-2">
-              <p className="text-3xl font-extrabold text-primary-dark">{fact.value}</p>
+              <p className="text-3xl font-black text-primary-dark">{fact.value}</p>
               <p className="text-sm text-text-muted">{fact.contextSnippet}</p>
             </div>
           ) : (
-            <span className="flex items-center gap-1 text-sm font-bold text-action">
+            <span className="flex items-center gap-1.5 rounded-full bg-[#d3eefd] px-3 py-1.5 text-sm font-bold text-action-dark">
               <Eye className="h-4 w-4" strokeWidth={2.5} />
               Tap to reveal
             </span>
           )}
         </div>
 
-        <div className="flex items-center justify-center gap-1 text-xs text-text-muted">
+        <div className="flex items-center justify-center gap-1 text-xs font-medium text-text-muted">
           <RotateCcw className="h-3.5 w-3.5" />
           Swipe right if you knew it, left to revise
         </div>
 
         <motion.div
           style={{ opacity: knowOpacity }}
-          className="pointer-events-none absolute right-6 top-6 -rotate-12 rounded-lg border-4 border-primary px-3 py-1 text-xl font-extrabold text-primary"
+          className="pointer-events-none absolute right-6 top-8 -rotate-12 rounded-lg border-4 border-primary bg-white/80 px-3 py-1 text-xl font-black text-primary"
         >
           KNEW IT
         </motion.div>
         <motion.div
           style={{ opacity: reviseOpacity }}
-          className="pointer-events-none absolute left-6 top-6 rotate-12 rounded-lg border-4 border-danger px-3 py-1 text-xl font-extrabold text-danger"
+          className="pointer-events-none absolute left-6 top-8 rotate-12 rounded-lg border-4 border-danger bg-white/80 px-3 py-1 text-xl font-black text-danger"
         >
           REVISE
         </motion.div>

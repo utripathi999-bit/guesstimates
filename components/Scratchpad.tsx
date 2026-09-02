@@ -53,9 +53,11 @@ export function Scratchpad({ questionId, questionTitle }: ScratchpadProps) {
   }
 
   return (
-    <div className="rounded-2xl border-2 border-surface-border bg-surface p-5">
-      <div className="mb-3 flex items-center gap-2 font-extrabold text-foreground">
-        <PenLine className="h-5 w-5 text-action" strokeWidth={2.5} />
+    <div className="shadow-card rounded-2xl bg-surface p-5">
+      <div className="mb-3 flex items-center gap-2 font-black text-foreground">
+        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#d3eefd] text-action-dark">
+          <PenLine className="h-4 w-4" strokeWidth={2.5} />
+        </span>
         Try Your Own Estimate
       </div>
       <textarea
@@ -63,7 +65,7 @@ export function Scratchpad({ questionId, questionTitle }: ScratchpadProps) {
         onChange={(e) => handleChange(e.target.value)}
         placeholder="Jot down your structure: population base, key segments, assumptions, and your rough final number..."
         rows={6}
-        className="w-full resize-y rounded-xl border-2 border-surface-border bg-background p-3 text-sm text-foreground outline-none focus:border-action"
+        className="w-full resize-y rounded-xl bg-background p-3 text-sm text-foreground outline-none ring-1 ring-inset ring-surface-border focus:ring-2 focus:ring-action"
       />
 
       <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -75,13 +77,13 @@ export function Scratchpad({ questionId, questionTitle }: ScratchpadProps) {
       </div>
 
       {hint && (
-        <div className="animate-slide-up mt-3 flex gap-2 rounded-xl border-2 border-[#ffe58a] bg-[#fff9e6] p-3 text-sm text-[#7a5b00]">
+        <div className="animate-slide-up shadow-card mt-3 flex gap-2 rounded-xl bg-gradient-to-br from-[#fff9e6] to-[#fff0c2] p-3 text-sm text-[#7a5b00]">
           <Lightbulb className="h-4 w-4 shrink-0 translate-y-0.5" strokeWidth={2.5} />
           <p>{hint}</p>
         </div>
       )}
       {hintError && (
-        <div className="animate-slide-up mt-3 rounded-xl border-2 border-[#ffd0d0] bg-[#fff0f0] p-3 text-sm text-danger-dark">
+        <div className="animate-slide-up shadow-card mt-3 rounded-xl bg-[#fff0f0] p-3 text-sm text-danger-dark">
           {hintError}
         </div>
       )}

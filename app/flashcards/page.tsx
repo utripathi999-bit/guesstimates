@@ -48,7 +48,8 @@ export default function FlashcardsPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-col items-center px-4 py-8">
-      <h1 className="mb-1 text-2xl font-extrabold text-foreground">Fact Flashcards</h1>
+      <p className="text-xs font-black uppercase tracking-wider text-assumed-dark">Fact Mastery</p>
+      <h1 className="text-display mb-1 text-3xl font-black text-foreground">Fact Flashcards</h1>
       <p className="mb-5 text-center text-text-muted">Swipe right if you knew it, left if you need revision.</p>
 
       <div className="mb-4 flex flex-wrap justify-center gap-2">

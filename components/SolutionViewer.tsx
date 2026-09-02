@@ -26,9 +26,11 @@ export function SolutionViewer({ guesstimate }: SolutionViewerProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="rounded-2xl border-2 border-surface-border bg-surface p-5">
-        <div className="mb-2 flex items-center gap-2 font-extrabold text-foreground">
-          <Sigma className="h-5 w-5 text-primary" strokeWidth={2.5} />
+      <div className="shadow-card rounded-2xl bg-surface p-5">
+        <div className="mb-2 flex items-center gap-2 font-black text-foreground">
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#e3f8cc] text-primary-dark">
+            <Sigma className="h-4 w-4" strokeWidth={2.5} />
+          </span>
           Core Equation
         </div>
         <p className="rounded-xl bg-background px-4 py-3 font-mono text-sm text-foreground">
@@ -37,23 +39,23 @@ export function SolutionViewer({ guesstimate }: SolutionViewerProps) {
       </div>
 
       <div>
-        <h3 className="mb-3 text-lg font-extrabold text-foreground">Approach Flow</h3>
+        <h3 className="text-display mb-3 text-lg font-black text-foreground">Approach Flow</h3>
         <ProcessFlowTree steps={guesstimate.steps} finalAnswer={guesstimate.finalAnswer} />
       </div>
 
       <div>
-        <h3 className="mb-3 text-lg font-extrabold text-foreground">Step-by-Step Breakdown</h3>
+        <h3 className="text-display mb-3 text-lg font-black text-foreground">Step-by-Step Breakdown</h3>
         <div className="flex flex-col gap-3">
           {guesstimate.steps.map((step) => {
             const expanded = expandedSteps.has(step.stepNumber);
             return (
-              <div key={step.stepNumber} className="overflow-hidden rounded-2xl border-2 border-surface-border bg-surface">
+              <div key={step.stepNumber} className="shadow-card overflow-hidden rounded-2xl bg-surface">
                 <button
                   onClick={() => toggleStep(step.stepNumber)}
                   className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
                 >
-                  <span className="flex items-center gap-2 font-extrabold text-foreground">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs text-white">
+                  <span className="flex items-center gap-2 font-black text-foreground">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary-dark text-xs text-white shadow-[0_2px_6px_-1px_hsl(96_100%_35%/0.5)]">
                       {step.stepNumber}
                     </span>
                     {step.stepTitle}
@@ -63,7 +65,7 @@ export function SolutionViewer({ guesstimate }: SolutionViewerProps) {
                   />
                 </button>
                 {expanded && (
-                  <div className="animate-slide-up border-t-2 border-surface-border px-4 py-4">
+                  <div className="animate-slide-up border-t border-surface-border px-4 py-4">
                     {step.formula && (
                       <p className="mb-3 rounded-lg bg-background px-3 py-2 font-mono text-xs text-text-muted">
                         {step.formula}
@@ -81,13 +83,13 @@ export function SolutionViewer({ guesstimate }: SolutionViewerProps) {
                             </div>
                             <p className="mt-1 text-xs text-text-muted">{item.sourceOrLogic}</p>
                           </div>
-                          <span className="whitespace-nowrap font-extrabold text-primary-dark sm:pl-4">{item.value}</span>
+                          <span className="whitespace-nowrap font-black text-primary-dark sm:pl-4">{item.value}</span>
                         </li>
                       ))}
                     </ul>
-                    <div className="mt-3 flex items-center justify-between rounded-lg bg-[#f0f9ff] px-3 py-2">
+                    <div className="mt-3 flex items-center justify-between rounded-lg bg-[#eaf7fe] px-3 py-2">
                       <span className="font-mono text-xs text-text-muted">{step.calculation}</span>
-                      <span className="font-extrabold text-action-dark">{step.result}</span>
+                      <span className="font-black text-action-dark">{step.result}</span>
                     </div>
                   </div>
                 )}
@@ -97,16 +99,16 @@ export function SolutionViewer({ guesstimate }: SolutionViewerProps) {
         </div>
       </div>
 
-      <div className="rounded-2xl border-2 border-[#bff3d1] bg-[#f0fdf6] p-5">
-        <div className="mb-2 flex items-center gap-2 font-extrabold text-factual-dark">
+      <div className="shadow-card rounded-2xl bg-gradient-to-br from-[#f0fdf6] to-[#e3f8cc] p-5">
+        <div className="mb-2 flex items-center gap-2 font-black text-factual-dark">
           <ShieldCheck className="h-5 w-5" strokeWidth={2.5} />
           Sanity Check
         </div>
         <p className="text-sm text-foreground">{guesstimate.sanityCheck}</p>
       </div>
 
-      <div className="rounded-2xl border-2 border-[#ffe9b3] bg-[#fffbf0] p-5">
-        <div className="mb-2 flex items-center gap-2 font-extrabold text-accent-dark">
+      <div className="shadow-card rounded-2xl bg-gradient-to-br from-[#fffbf0] to-[#fff4cc] p-5">
+        <div className="mb-2 flex items-center gap-2 font-black text-accent-dark">
           <Lightbulb className="h-5 w-5" strokeWidth={2.5} />
           Interviewer Tips
         </div>

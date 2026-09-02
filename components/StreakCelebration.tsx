@@ -37,13 +37,13 @@ export function StreakCelebration({ open, onClose, streak, freezeUsed }: StreakC
   return (
     <Modal open={open} onClose={onClose} className="text-center">
       <div className="flex flex-col items-center gap-3 py-4">
-        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#fff4e5]">
-          <Flame className="animate-flame-flicker h-11 w-11 text-streak" strokeWidth={2.5} fill="#FF9600" />
+        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-[#ffdca8] to-[#ffb44d] shadow-[0_8px_20px_-6px_hsl(35_100%_50%/0.5)]">
+          <Flame className="animate-flame-flicker h-11 w-11 text-white" strokeWidth={2.5} fill="white" />
         </div>
-        <h2 className="text-2xl font-extrabold text-foreground">Daily Goal Complete!</h2>
+        <h2 className="text-display text-2xl font-black text-foreground">Daily Goal Complete!</h2>
         <p className="text-text-muted">
           You&apos;ve solved both of today&apos;s guesstimates. Your streak is now{' '}
-          <span className="font-extrabold text-streak">{streak} day{streak === 1 ? '' : 's'}</span>.
+          <span className="font-black text-streak">{streak} day{streak === 1 ? '' : 's'}</span>.
         </p>
 
         {freezeUsed && (

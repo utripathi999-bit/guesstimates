@@ -93,16 +93,16 @@ export default function GuesstimatePage() {
         <button
           onClick={handleToggleBookmark}
           aria-label={bookmarked ? 'Remove bookmark' : 'Add bookmark'}
-          className="rounded-full p-2 text-accent-dark hover:bg-black/5"
+          className={`rounded-full p-2 transition-colors ${bookmarked ? 'bg-[#fff4cc] text-accent-dark' : 'text-accent-dark hover:bg-black/5'}`}
         >
           {bookmarked ? <BookmarkCheck className="h-6 w-6" fill="currentColor" /> : <Bookmark className="h-6 w-6" />}
         </button>
       </div>
 
-      <h1 className="mb-6 text-3xl font-extrabold leading-tight text-foreground">{guesstimate.title}</h1>
+      <h1 className="text-display mb-6 text-3xl font-black leading-tight text-foreground sm:text-4xl">{guesstimate.title}</h1>
 
       {status === 'Completed' && (
-        <div className="mb-6 flex items-center gap-2 rounded-xl border-2 border-[#bff3d1] bg-[#f0fdf6] px-4 py-3 font-bold text-factual-dark">
+        <div className="shadow-card mb-6 flex items-center gap-2 rounded-2xl bg-gradient-to-br from-[#f0fdf6] to-[#e3f8cc] px-4 py-3 font-bold text-factual-dark">
           <CheckCircle2 className="h-5 w-5" strokeWidth={2.5} />
           You&apos;ve already completed this one — revisit the solution any time.
         </div>
@@ -113,8 +113,10 @@ export default function GuesstimatePage() {
           onClick={() => setClarifyOpen((o) => !o)}
           className="flex w-full items-center justify-between gap-3 text-left"
         >
-          <span className="flex items-center gap-2 font-extrabold text-foreground">
-            <HelpCircle className="h-5 w-5 text-action" strokeWidth={2.5} />
+          <span className="flex items-center gap-2 font-black text-foreground">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#d3eefd] text-action-dark">
+              <HelpCircle className="h-4 w-4" strokeWidth={2.5} />
+            </span>
             Clarifying Questions
           </span>
           <ChevronDown className={`h-5 w-5 text-text-muted transition-transform ${clarifyOpen ? 'rotate-180' : ''}`} />
@@ -123,7 +125,7 @@ export default function GuesstimatePage() {
           <ul className="animate-slide-up mt-3 flex flex-col gap-2">
             {guesstimate.clarifyingQuestions.map((q, i) => (
               <li key={i} className="flex items-start gap-2 rounded-xl bg-background p-3 text-sm text-foreground">
-                <span className="font-extrabold text-action">Q{i + 1}.</span>
+                <span className="font-black text-action-dark">Q{i + 1}.</span>
                 {q}
               </li>
             ))}

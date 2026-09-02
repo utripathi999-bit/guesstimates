@@ -12,31 +12,42 @@ import { useStreakData } from '@/lib/streakStorage';
 import type { Guesstimate, QuestionStatus } from '@/lib/types';
 
 const STATUS_META: Record<QuestionStatus, { icon: typeof Circle; className: string }> = {
-  Unsolved: { icon: Circle, className: 'bg-[#ececec] text-[#5c5c5c]' },
+  Unsolved: { icon: Circle, className: 'bg-[#ececec] text-[#5c5850]' },
   'In Progress': { icon: Sparkles, className: 'bg-[#fff4cc] text-accent-dark' },
   Completed: { icon: CheckCircle2, className: 'bg-[#d1fae5] text-factual-dark' },
 };
 
+const STAT_TILES = [
+  { key: 'currentStreak', label: 'Day Streak', icon: Flame, from: '#ffdca8', to: '#ffb44d', text: '#8a4b00' },
+  { key: 'longestStreak', label: 'Best Streak', icon: Trophy, from: '#fff0ad', to: '#ffe066', text: '#836a00' },
+  { key: 'xp', label: 'Total XP', icon: Sparkles, from: '#aee6fd', to: '#7ed2fb', text: '#0a5b82' },
+  { key: 'freezesAvailable', label: 'Streak Freeze', icon: Snowflake, from: '#c8e9fd', to: '#9fd6fb', text: '#0a5b82' },
+] as const;
+
 function QuestionCard({ guesstimate, status }: { guesstimate: Guesstimate; status: QuestionStatus }) {
   const StatusIcon = STATUS_META[status].icon;
+  const accent = guesstimate.region === 'India' ? 'from-primary to-primary-dark' : 'from-action to-action-dark';
   return (
     <Link href={`/guesstimate/${guesstimate.id}`}>
-      <Card interactive className="flex h-full flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <span className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-extrabold ${STATUS_META[status].className}`}>
-            <StatusIcon className="h-3.5 w-3.5" strokeWidth={2.5} />
-            {status}
-          </span>
-          <span className="flex items-center gap-1 text-xs font-bold text-text-muted">
-            {guesstimate.region === 'India' ? <MapPin className="h-3.5 w-3.5" /> : <Globe2 className="h-3.5 w-3.5" />}
-            {guesstimate.region}
-          </span>
-        </div>
-        <p className="flex-1 text-lg font-extrabold text-foreground">{guesstimate.title}</p>
-        <div className="flex flex-wrap gap-2">
-          <Badge tone="primary">{guesstimate.category}</Badge>
-          <Badge tone="action">{guesstimate.difficulty}</Badge>
-          <Badge tone="neutral">{guesstimate.approach}</Badge>
+      <Card interactive className="flex h-full flex-col gap-3 overflow-hidden !p-0">
+        <div className={`h-1.5 w-full bg-gradient-to-r ${accent}`} />
+        <div className="flex flex-1 flex-col gap-3 p-5">
+          <div className="flex items-center justify-between">
+            <span className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black ${STATUS_META[status].className}`}>
+              <StatusIcon className="h-3.5 w-3.5" strokeWidth={2.5} />
+              {status}
+            </span>
+            <span className="flex items-center gap-1 text-xs font-bold text-text-muted">
+              {guesstimate.region === 'India' ? <MapPin className="h-3.5 w-3.5" /> : <Globe2 className="h-3.5 w-3.5" />}
+              {guesstimate.region}
+            </span>
+          </div>
+          <p className="flex-1 text-xl font-black leading-snug text-foreground">{guesstimate.title}</p>
+          <div className="flex flex-wrap gap-2">
+            <Badge tone="primary">{guesstimate.category}</Badge>
+            <Badge tone="action">{guesstimate.difficulty}</Badge>
+            <Badge tone="neutral">{guesstimate.approach}</Badge>
+          </div>
         </div>
       </Card>
     </Link>
@@ -57,6 +68,12 @@ export default function HomePage() {
   }, [dailyPair, streak.completedQuestionIds, streak.inProgressIds]);
 
   const completedToday = dailyPair.filter((g) => statuses[g.id] === 'Completed').length;
+  const statValues: Record<(typeof STAT_TILES)[number]['key'], number> = {
+    currentStreak: streak.currentStreak,
+    longestStreak: streak.longestStreak,
+    xp: streak.xp,
+    freezesAvailable: streak.freezesAvailable,
+  };
 
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-8">
@@ -65,32 +82,27 @@ export default function HomePage() {
         animate={{ opacity: 1, y: 0 }}
         className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4"
       >
-        <Card className="flex flex-col items-center gap-1 text-center">
-          <Flame className="h-6 w-6 text-streak" strokeWidth={2.5} fill="#FF9600" />
-          <span className="text-2xl font-extrabold text-foreground">{streak.currentStreak}</span>
-          <span className="text-xs text-text-muted">Day Streak</span>
-        </Card>
-        <Card className="flex flex-col items-center gap-1 text-center">
-          <Trophy className="h-6 w-6 text-accent" strokeWidth={2.5} />
-          <span className="text-2xl font-extrabold text-foreground">{streak.longestStreak}</span>
-          <span className="text-xs text-text-muted">Best Streak</span>
-        </Card>
-        <Card className="flex flex-col items-center gap-1 text-center">
-          <Sparkles className="h-6 w-6 text-action" strokeWidth={2.5} />
-          <span className="text-2xl font-extrabold text-foreground">{streak.xp}</span>
-          <span className="text-xs text-text-muted">Total XP</span>
-        </Card>
-        <Card className="flex flex-col items-center gap-1 text-center">
-          <Snowflake className="h-6 w-6 text-action" strokeWidth={2.5} />
-          <span className="text-2xl font-extrabold text-foreground">{streak.freezesAvailable}</span>
-          <span className="text-xs text-text-muted">Streak Freeze</span>
-        </Card>
+        {STAT_TILES.map(({ key, label, icon: Icon, from, to, text }) => (
+          <Card key={key} className="flex flex-col items-center gap-2 text-center">
+            <span
+              className="flex h-11 w-11 items-center justify-center rounded-2xl"
+              style={{ background: `linear-gradient(135deg, ${from}, ${to})`, color: text }}
+            >
+              <Icon className="h-5 w-5" strokeWidth={2.5} fill={key === 'currentStreak' ? text : 'none'} />
+            </span>
+            <span className="text-2xl font-black tabular-nums text-foreground">{statValues[key]}</span>
+            <span className="text-xs font-bold text-text-muted">{label}</span>
+          </Card>
+        ))}
       </motion.div>
 
       <div className="mb-8">
-        <div className="mb-2 flex items-center justify-between">
-          <h1 className="text-2xl font-extrabold text-foreground">Today&apos;s 2 Guesstimates</h1>
-          <span className="font-bold text-text-muted">{completedToday}/2 done</span>
+        <div className="mb-2 flex items-end justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-wider text-primary-dark">Today</p>
+            <h1 className="text-display text-3xl font-black text-foreground">Your 2 Guesstimates</h1>
+          </div>
+          <span className="font-black tabular-nums text-text-muted">{completedToday}/2 done</span>
         </div>
         <Progress value={(completedToday / 2) * 100} />
       </div>
@@ -101,7 +113,7 @@ export default function HomePage() {
       </div>
 
       {completedToday === 2 && (
-        <div className="animate-slide-up mt-8 flex items-center gap-3 rounded-2xl border-2 border-[#bff3d1] bg-[#f0fdf6] p-5">
+        <div className="animate-slide-up shadow-card mt-8 flex items-center gap-3 rounded-2xl bg-gradient-to-br from-[#f0fdf6] to-[#e3f8cc] p-5">
           <CheckCircle2 className="h-6 w-6 shrink-0 text-factual-dark" strokeWidth={2.5} />
           <p className="text-sm font-bold text-factual-dark">
             You&apos;ve completed both of today&apos;s guesstimates. Come back tomorrow to keep your streak alive!

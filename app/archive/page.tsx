@@ -91,16 +91,17 @@ export default function ArchivePage() {
 
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-8">
-      <h1 className="mb-1 text-2xl font-extrabold text-foreground">Archive</h1>
+      <p className="text-xs font-black uppercase tracking-wider text-action-dark">Practice Library</p>
+      <h1 className="text-display mb-1 text-3xl font-black text-foreground">Archive</h1>
       <p className="mb-6 text-text-muted">Browse and practice every guesstimate in the dataset.</p>
 
-      <div className="relative mb-4">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+      <div className="shadow-card relative mb-4 rounded-2xl">
+        <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search titles, categories, approaches..."
-          className="w-full rounded-xl border-2 border-surface-border bg-surface py-2.5 pl-10 pr-4 text-sm outline-none focus:border-action"
+          className="w-full rounded-2xl bg-surface py-3 pl-11 pr-4 text-sm outline-none focus:ring-2 focus:ring-action"
         />
       </div>
 
@@ -142,21 +143,24 @@ export default function ArchivePage() {
           const StatusIcon = STATUS_META[status].icon;
           return (
             <Link key={g.id} href={`/guesstimate/${g.id}`}>
-              <Card interactive className="flex h-full flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <span className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-extrabold ${STATUS_META[status].className}`}>
-                    <StatusIcon className="h-3.5 w-3.5" strokeWidth={2.5} />
-                    {status}
-                  </span>
-                  <span className="flex items-center gap-1 text-xs font-bold text-text-muted">
-                    {g.region === 'India' ? <MapPin className="h-3.5 w-3.5" /> : <Globe2 className="h-3.5 w-3.5" />}
-                    {g.region}
-                  </span>
-                </div>
-                <p className="flex-1 font-extrabold text-foreground">{g.title}</p>
-                <div className="flex flex-wrap gap-2">
-                  <Badge tone="primary">{g.category}</Badge>
-                  <Badge tone="action">{g.difficulty}</Badge>
+              <Card interactive className="flex h-full flex-col gap-3 overflow-hidden !p-0">
+                <div className={`h-1.5 w-full bg-gradient-to-r ${g.region === 'India' ? 'from-primary to-primary-dark' : 'from-action to-action-dark'}`} />
+                <div className="flex flex-1 flex-col gap-3 p-5">
+                  <div className="flex items-center justify-between">
+                    <span className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black ${STATUS_META[status].className}`}>
+                      <StatusIcon className="h-3.5 w-3.5" strokeWidth={2.5} />
+                      {status}
+                    </span>
+                    <span className="flex items-center gap-1 text-xs font-bold text-text-muted">
+                      {g.region === 'India' ? <MapPin className="h-3.5 w-3.5" /> : <Globe2 className="h-3.5 w-3.5" />}
+                      {g.region}
+                    </span>
+                  </div>
+                  <p className="flex-1 font-black text-foreground">{g.title}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge tone="primary">{g.category}</Badge>
+                    <Badge tone="action">{g.difficulty}</Badge>
+                  </div>
                 </div>
               </Card>
             </Link>
@@ -165,7 +169,7 @@ export default function ArchivePage() {
       </div>
 
       {filtered.length === 0 && (
-        <div className="mt-8 rounded-2xl border-2 border-surface-border bg-surface p-8 text-center text-text-muted">
+        <div className="shadow-card mt-8 rounded-2xl bg-surface p-8 text-center text-text-muted">
           No guesstimates match these filters.
         </div>
       )}

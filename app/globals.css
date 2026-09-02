@@ -15,11 +15,17 @@
   --color-danger: #ff4b4b;
   --color-danger-dark: #ea2b2b;
 
-  --background: #f7f7f7;
-  --foreground: #3c3c3c;
+  --background: #faf8f3;
+  --foreground: #2b2b2b;
   --surface: #ffffff;
-  --surface-border: #e5e5e5;
-  --text-muted: #777777;
+  --surface-border: #ece7db;
+  --text-muted: #767268;
+
+  --shadow-ambient: 43 30% 20%;
+  --shadow-primary: 96 100% 40%;
+  --shadow-accent: 45 100% 50%;
+  --shadow-action: 199 96% 55%;
+  --shadow-danger: 0 100% 65%;
 }
 
 @theme inline {
@@ -50,11 +56,12 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #131f24;
-    --foreground: #e5e5e5;
-    --surface: #1b2b32;
-    --surface-border: #2b3940;
-    --text-muted: #a0a8ab;
+    --background: #10191c;
+    --foreground: #ece7db;
+    --surface: #1a262a;
+    --surface-border: #2b3a3f;
+    --text-muted: #93a1a3;
+    --shadow-ambient: 190 40% 2%;
   }
 }
 
@@ -63,9 +70,39 @@
 }
 
 body {
-  background: var(--color-background);
+  background:
+    radial-gradient(ellipse 900px 600px at 8% -10%, color-mix(in srgb, var(--color-primary) 10%, transparent), transparent),
+    radial-gradient(ellipse 800px 500px at 100% 0%, color-mix(in srgb, var(--color-accent) 12%, transparent), transparent),
+    radial-gradient(ellipse 700px 500px at 90% 100%, color-mix(in srgb, var(--color-action) 8%, transparent), transparent),
+    var(--color-background);
+  background-attachment: fixed;
   color: var(--color-foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  text-wrap: pretty;
+}
+
+h1, h2, h3, .text-display {
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.shadow-glow-primary {
+  box-shadow: 0 6px 0 var(--color-primary-dark), 0 14px 24px -8px hsl(var(--shadow-primary) / 0.45);
+}
+.shadow-glow-accent {
+  box-shadow: 0 6px 0 var(--color-accent-dark), 0 14px 24px -8px hsl(var(--shadow-accent) / 0.4);
+}
+.shadow-glow-action {
+  box-shadow: 0 6px 0 var(--color-action-dark), 0 14px 24px -8px hsl(var(--shadow-action) / 0.4);
+}
+.shadow-glow-danger {
+  box-shadow: 0 6px 0 var(--color-danger-dark), 0 14px 24px -8px hsl(var(--shadow-danger) / 0.4);
+}
+.shadow-card {
+  box-shadow: 0 1px 2px hsl(var(--shadow-ambient) / 0.04), 0 8px 20px -6px hsl(var(--shadow-ambient) / 0.1);
+}
+.shadow-card-hover {
+  box-shadow: 0 4px 10px hsl(var(--shadow-ambient) / 0.06), 0 16px 32px -10px hsl(var(--shadow-ambient) / 0.16);
 }
 
 @keyframes pop {

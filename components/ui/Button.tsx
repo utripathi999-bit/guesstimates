@@ -10,13 +10,13 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary:
-    'bg-primary text-white border-primary-dark hover:brightness-105 disabled:bg-[#e5e5e5] disabled:border-[#d0d0d0] disabled:text-[#a0a0a0]',
+    'bg-primary text-white border-primary-dark shadow-[0_10px_20px_-8px_hsl(96_100%_35%/0.5)] hover:brightness-105 disabled:bg-[#e5e2d6] disabled:border-[#d5d1c2] disabled:text-[#a19d90] disabled:shadow-none',
   accent:
-    'bg-accent text-white border-accent-dark hover:brightness-105 disabled:bg-[#e5e5e5] disabled:border-[#d0d0d0] disabled:text-[#a0a0a0]',
+    'bg-accent text-white border-accent-dark shadow-[0_10px_20px_-8px_hsl(45_100%_45%/0.5)] hover:brightness-105 disabled:bg-[#e5e2d6] disabled:border-[#d5d1c2] disabled:text-[#a19d90] disabled:shadow-none',
   action:
-    'bg-action text-white border-action-dark hover:brightness-105 disabled:bg-[#e5e5e5] disabled:border-[#d0d0d0] disabled:text-[#a0a0a0]',
+    'bg-action text-white border-action-dark shadow-[0_10px_20px_-8px_hsl(199_96%_50%/0.5)] hover:brightness-105 disabled:bg-[#e5e2d6] disabled:border-[#d5d1c2] disabled:text-[#a19d90] disabled:shadow-none',
   danger:
-    'bg-danger text-white border-danger-dark hover:brightness-105 disabled:bg-[#e5e5e5] disabled:border-[#d0d0d0] disabled:text-[#a0a0a0]',
+    'bg-danger text-white border-danger-dark shadow-[0_10px_20px_-8px_hsl(0_100%_60%/0.5)] hover:brightness-105 disabled:bg-[#e5e2d6] disabled:border-[#d5d1c2] disabled:text-[#a19d90] disabled:shadow-none',
   neutral:
     'bg-surface text-foreground border-surface-border hover:bg-[color-mix(in_srgb,var(--color-surface)_90%,black)]',
   ghost: 'bg-transparent text-foreground border-transparent hover:bg-black/5',
@@ -35,8 +35,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         disabled={disabled}
-        className={`inline-flex items-center justify-center gap-2 rounded-2xl font-extrabold uppercase tracking-wide transition-all select-none
-          ${isFlat ? '' : 'border-b-4 active:border-b-0 active:translate-y-1'}
+        className={`inline-flex items-center justify-center gap-2 rounded-2xl font-extrabold uppercase tracking-wide transition-all duration-150 select-none
+          ${isFlat ? '' : 'border-b-4 hover:-translate-y-0.5 active:border-b-0 active:translate-y-1 active:shadow-none'}
           ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}
           ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size]} ${className}`}
         {...props}

@@ -89,8 +89,13 @@ export async function DELETE(request: NextRequest) {
   }
 
   const email = normalizeEmail(validation.data.email);
-  if (account && email === account.email) {
-    return NextResponse.json({ error: "You can't delete your own owner account" }, { status: 400 });
+
+  // Guard the OWNER account specifically — not merely whichever account happens
+  // to be signed in, which would block token-authorized cleanup of a session
+  // that isn't the owner's.
+  const ownerEmail = process.env.OWNER_EMAIL ? normalizeEmail(process.env.OWNER_EMAIL) : null;
+  if (ownerEmail && email === ownerEmail) {
+    return NextResponse.json({ error: "You can't delete the owner account" }, { status: 400 });
   }
 
   try {

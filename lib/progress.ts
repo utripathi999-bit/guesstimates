@@ -1,4 +1,5 @@
 import { getRedis, isRedisConfigured, KEYS } from '@/lib/redis';
+import { getWeekStart } from '@/lib/week';
 
 /**
  * SERVER-AUTHORITATIVE progress and scoring.
@@ -88,11 +89,39 @@ async function saveProgress(normalizedEmail: string, progress: UserProgress): Pr
   await pipeline.exec();
 }
 
+/** Weekly boards are kept for a season, then expire on their own. */
+const WEEKLY_TTL_SECONDS = 120 * 24 * 60 * 60;
+
+/**
+ * Mirrors freshly-earned points into the current week's board.
+ *
+ * Tracked as its own running total rather than derived from lifetime points,
+ * because the weekly board has to start everyone at zero each Sunday — a
+ * cumulative score can't be un-accumulated. Best-effort: failing to log a
+ * weekly point must never cost a student their actual progress.
+ */
+async function awardWeekly(normalizedEmail: string, points: number, todayStr: string): Promise<void> {
+  if (points <= 0 || !isRedisConfigured()) return;
+  try {
+    const key = KEYS.leaderboardWeekly(getWeekStart(todayStr));
+    const pipeline = getRedis().pipeline();
+    pipeline.zincrby(key, points, normalizedEmail);
+    pipeline.expire(key, WEEKLY_TTL_SECONDS);
+    await pipeline.exec();
+  } catch (error) {
+    console.error('progress: weekly board update failed', error);
+  }
+}
+
 /**
  * Records an attempt. Idempotent: attempt points are awarded the first time a
  * given question is opened and never again, so reopening can't farm points.
  */
-export async function recordAttempt(normalizedEmail: string, questionId: string): Promise<UserProgress> {
+export async function recordAttempt(
+  normalizedEmail: string,
+  questionId: string,
+  todayStr: string
+): Promise<UserProgress> {
   const progress = await getProgress(normalizedEmail);
   if (progress.attemptedQuestionIds.includes(questionId)) return progress;
 
@@ -100,6 +129,7 @@ export async function recordAttempt(normalizedEmail: string, questionId: string)
   progress.points += POINTS.ATTEMPT;
 
   await saveProgress(normalizedEmail, progress);
+  await awardWeekly(normalizedEmail, POINTS.ATTEMPT, todayStr);
   return progress;
 }
 
@@ -200,6 +230,7 @@ export async function recordSolve(
 
   progress.points += pointsEarned;
   await saveProgress(normalizedEmail, progress);
+  await awardWeekly(normalizedEmail, pointsEarned, todayStr);
 
   return { progress, pointsEarned, streakAdvanced, bothDoneToday, freezeUsed, counted: true };
 }

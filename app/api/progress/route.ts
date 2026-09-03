@@ -48,18 +48,20 @@ export async function POST(request: NextRequest) {
   if (!question) return NextResponse.json({ error: 'Unknown question' }, { status: 404 });
 
   try {
+    // Today's date comes from the server's own clock, never the request body.
+    const todayStr = getUtcDateString();
+
     if (action === 'attempt') {
-      const progress = await recordAttempt(account.email, questionId);
+      const progress = await recordAttempt(account.email, questionId, todayStr);
       return NextResponse.json({ progress });
     }
 
-    // Today's pair and today's date come from the server, not the request.
     const daily = await getDailyPair();
     const result = await recordSolve(
       account.email,
       questionId,
       daily.questions.map((q) => q.id),
-      getUtcDateString()
+      todayStr
     );
 
     return NextResponse.json({

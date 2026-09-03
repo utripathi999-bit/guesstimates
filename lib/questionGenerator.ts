@@ -85,6 +85,13 @@ const QUALITY_RULES = `WHAT MAKES THESE GOOD:
   to answer them consistently, so make them ones the case's scope genuinely resolves.
 - "sanityCheck" must be a real cross-check (a per-capita or per-unit reality test), not a restatement.
 - "interviewerTips" are what separates a good answer from a great one — method, not trivia.
+- "answer" is the target the student commits a number against before they see any of this, so it has to be
+  unambiguous on its own. "answer.label" names the quantity in full and settles money-vs-volume outright:
+  "Total annual revenue from ticket sales", not "Annual sales". "answer.unit" carries the scale as well as
+  the unit — "₹ crore per year", "million units per year", "cups per day" — because a student who reads
+  "₹" alone will not know whether to type 4200 or 42000000000. "answer.value" is that same worked answer as
+  a plain number in exactly that unit, and it must equal what the final step arrives at. If the title asks
+  for a rupee figure, the unit is money; if it asks how many, the unit is countable things. Never both.
 
 STYLE: every field is read by someone under time pressure. Tight, concrete sentences. No padding, no
 throat-clearing, no restating the title.

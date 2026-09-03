@@ -29,6 +29,19 @@ export interface GuesstimateStep {
   items: GuesstimateStepItem[];
 }
 
+/**
+ * What the student is being asked to produce, stated explicitly so nobody has
+ * to infer whether "annual sales" means rupees or units.
+ */
+export interface AnswerSpec {
+  /** The quantity itself, e.g. "Total annual revenue from gym memberships". */
+  label: string;
+  /** The unit and scale that number is in, e.g. "₹ crore per year". */
+  unit: string;
+  /** The worked answer as a plain number, expressed in the unit above. */
+  value: number;
+}
+
 export interface Guesstimate {
   id: string;
   title: string;
@@ -41,6 +54,12 @@ export interface Guesstimate {
   coreEquation: string;
   steps: GuesstimateStep[];
   finalAnswer: string;
+  /**
+   * Optional only for the legacy seed set, whose answers are prose ranges with
+   * no single number to score against. Every AI-generated question carries one,
+   * and the estimate gate only appears when it's present.
+   */
+  answer?: AnswerSpec;
   interviewerTips: string[];
   sanityCheck: string;
 }

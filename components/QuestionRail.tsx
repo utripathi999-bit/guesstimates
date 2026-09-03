@@ -63,6 +63,21 @@ export function QuestionRail({ guesstimate, bookmarked, onToggleBookmark }: Ques
         </button>
       </div>
 
+      {/* States the target outright — a title like "annual sales" is ambiguous
+          between rupees and units, and the student shouldn't have to guess
+          which one they're being asked for. */}
+      {guesstimate.answer && (
+        <div className={`mt-3 rounded-xl bg-callout-info px-3 py-2 ${expanded ? 'block' : 'hidden'} lg:block`}>
+          <p className="text-[0.65rem] font-black uppercase tracking-wider text-callout-info-text opacity-80">
+            Estimate this
+          </p>
+          <p className="text-sm font-bold leading-snug text-callout-info-text">{guesstimate.answer.label}</p>
+          <p className="font-formula mt-1 text-xs font-black text-callout-info-text opacity-80">
+            in {guesstimate.answer.unit}
+          </p>
+        </div>
+      )}
+
       <div className={`mt-3 flex-wrap items-center gap-2 ${expanded ? 'flex' : 'hidden'} lg:flex`}>
         <Badge tone="primary">{guesstimate.category}</Badge>
         <Badge tone="action">{guesstimate.difficulty}</Badge>

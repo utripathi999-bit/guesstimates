@@ -24,6 +24,19 @@ export const GuesstimateStepZ = z.object({
   items: z.array(GuesstimateStepItemZ).min(1),
 });
 
+/**
+ * The number the student must commit before the solution unlocks.
+ *
+ * Optional here because the bundled seed set predates it and states its answers
+ * as prose ranges. Anything the model generates must include it — see
+ * `guesstimateResponseSchema` below, where it is required.
+ */
+export const AnswerSpecZ = z.object({
+  label: z.string().min(3),
+  unit: z.string().min(1),
+  value: z.number().positive().finite(),
+});
+
 export const GuesstimateZ = z.object({
   id: z.string(),
   title: z.string(),
@@ -36,6 +49,7 @@ export const GuesstimateZ = z.object({
   coreEquation: z.string(),
   steps: z.array(GuesstimateStepZ).min(2),
   finalAnswer: z.string(),
+  answer: AnswerSpecZ.optional(),
   interviewerTips: z.array(z.string()).min(1),
   sanityCheck: z.string(),
 });
@@ -73,6 +87,27 @@ const stepSchema = {
   required: ['stepNumber', 'stepTitle', 'type', 'calculation', 'result', 'items'],
 };
 
+const answerSpecSchema = {
+  type: Type.OBJECT,
+  properties: {
+    label: {
+      type: Type.STRING,
+      description:
+        'The exact quantity the student must produce, naming the metric unambiguously, e.g. "Total annual revenue from gym memberships" — never just "the answer".',
+    },
+    unit: {
+      type: Type.STRING,
+      description:
+        'The unit AND scale that number is in, e.g. "₹ crore per year", "million units per year", "cups per day". This is shown beside the input box, so it must remove any doubt about money vs volume.',
+    },
+    value: {
+      type: Type.NUMBER,
+      description: 'The worked answer as a plain number expressed in that unit. 4200 for "₹4,200 crore per year".',
+    },
+  },
+  required: ['label', 'unit', 'value'],
+};
+
 export const guesstimateResponseSchema = {
   type: Type.ARRAY,
   items: {
@@ -89,13 +124,14 @@ export const guesstimateResponseSchema = {
       coreEquation: { type: Type.STRING },
       steps: { type: Type.ARRAY, items: stepSchema },
       finalAnswer: { type: Type.STRING },
+      answer: answerSpecSchema,
       interviewerTips: { type: Type.ARRAY, items: { type: Type.STRING } },
       sanityCheck: { type: Type.STRING },
     },
     required: [
       'id', 'title', 'category', 'region', 'difficulty', 'approach',
       'clarifyingQuestions', 'keyAssumptions', 'coreEquation', 'steps',
-      'finalAnswer', 'interviewerTips', 'sanityCheck',
+      'finalAnswer', 'answer', 'interviewerTips', 'sanityCheck',
     ],
   },
 };

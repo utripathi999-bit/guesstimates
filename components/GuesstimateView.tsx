@@ -1,10 +1,11 @@
 'use client';
 
 import { AnimatePresence, motion } from 'framer-motion';
-import { CheckCircle2, Sparkles } from 'lucide-react';
+import { CheckCircle2, Loader2, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ClarifyingQuestions, type ClarificationPair } from '@/components/ClarifyingQuestions';
+import { EstimateGate, EstimateResult, useSubmittedEstimate } from '@/components/EstimateGate';
 import { useProgress } from '@/components/ProgressProvider';
 import { QuestionRail } from '@/components/QuestionRail';
 import { Scratchpad } from '@/components/Scratchpad';
@@ -20,12 +21,17 @@ interface GuesstimateViewProps {
 
 export function GuesstimateView({ guesstimate }: GuesstimateViewProps) {
   const router = useRouter();
-  const { statusOf, attempt, solve } = useProgress();
+  const { statusOf, attempt, solve, loading: progressLoading } = useProgress();
   // Bookmarks stay per-device — they're a personal reading aid, not scored progress.
   const localPrefs = useStreakData();
 
   const [clarifications, setClarifications] = useState<ClarificationPair[]>([]);
-  const [revealed, setRevealed] = useState(false);
+  const { submitted, setSubmitted, restoring } = useSubmittedEstimate(guesstimate.id);
+  /**
+   * Only used by the legacy seed questions, which have no numeric answer to
+   * commit against. Everything AI-generated is gated on the estimate instead.
+   */
+  const [revealedWithoutGate, setRevealedWithoutGate] = useState(false);
   const [saving, setSaving] = useState(false);
   const [celebration, setCelebration] = useState<{
     streak: number;
@@ -36,6 +42,16 @@ export function GuesstimateView({ guesstimate }: GuesstimateViewProps) {
 
   const bookmarked = localPrefs.bookmarkedIds.includes(guesstimate.id);
   const status = statusOf(guesstimate.id);
+  const answer = guesstimate.answer;
+  /**
+   * Anyone who finished a question before the gate existed has no estimate on
+   * record, and shouldn't be locked out of a solution they've already earned.
+   * Post-gate this is never reached on its own: solving requires revealing,
+   * and revealing requires committing a number.
+   */
+  const settled = !restoring && !progressLoading;
+  const solvedBeforeGate = settled && status === 'Completed' && submitted === null;
+  const revealed = answer ? submitted !== null || solvedBeforeGate : revealedWithoutGate;
 
   // Side effect only — reports the attempt to the server, which decides
   // whether it's worth anything. `attempt` is a no-op once already recorded.
@@ -86,9 +102,30 @@ export function GuesstimateView({ guesstimate }: GuesstimateViewProps) {
             <Scratchpad questionId={guesstimate.id} clarifications={clarifications} />
           </div>
 
-          {!revealed && (
+          {/* The gate is the point of the flow: a number has to be on the record
+              before the worked answer is visible, otherwise there is nothing to
+              compare and nothing to be curious about. Held back until both
+              lookups settle, so a question that was already answered doesn't
+              flash the gate before resolving to its result. */}
+          {answer && settled && !submitted && !solvedBeforeGate && (
+            <EstimateGate questionId={guesstimate.id} answer={answer} onCommitted={setSubmitted} />
+          )}
+
+          {answer && !settled && (
+            <div className="shadow-card mb-6 flex items-center justify-center gap-2 rounded-2xl bg-surface px-5 py-8 text-text-muted">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm font-bold">Checking your progress…</span>
+            </div>
+          )}
+
+          {!answer && !revealedWithoutGate && (
             <div className="flex justify-center">
-              <Button variant="accent" size="lg" onClick={() => setRevealed(true)} className="w-full sm:w-auto">
+              <Button
+                variant="accent"
+                size="lg"
+                onClick={() => setRevealedWithoutGate(true)}
+                className="w-full sm:w-auto"
+              >
                 <Sparkles className="h-5 w-5" />
                 Reveal Step-by-Step Breakdown
               </Button>
@@ -98,6 +135,7 @@ export function GuesstimateView({ guesstimate }: GuesstimateViewProps) {
           <AnimatePresence>
             {revealed && (
               <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
+                {answer && submitted && <EstimateResult answer={answer} submitted={submitted} />}
                 <SolutionViewer guesstimate={guesstimate} />
 
                 <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-between">

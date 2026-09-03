@@ -55,6 +55,19 @@ export const KEYS = {
   /** Sorted set: member = userId, score = currentStreak. */
   leaderboardStreaks: 'leaderboard:streaks' as const,
 
+  /**
+   * Points earned inside one weekly period, so the board can reset every Sunday
+   * without touching lifetime totals. `weekStart` is that Sunday's YYYY-MM-DD.
+   */
+  leaderboardWeekly: (weekStart: string): string => `leaderboard:weekly:${weekStart}`,
+
+  /**
+   * Every student's committed estimate for one question — a hash of
+   * normalized email to number, so re-submitting overwrites rather than
+   * skewing the batch median, and the median is one cheap read.
+   */
+  questionEstimates: (questionId: string): string => `guesstimates:estimates:${questionId}`,
+
   /** Hash of one account's auth + profile data, keyed by normalized (lowercased) email. */
   account: (normalizedEmail: string): string => `auth:account:${normalizedEmail}`,
 

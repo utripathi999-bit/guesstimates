@@ -21,6 +21,10 @@ export function Navbar() {
   const { account, loading, logout } = useAuth();
   const [authModalOpen, setAuthModalOpen] = useState(false);
 
+  // The welcome page is the signed-out entry point — nav links all lead to
+  // gated pages, so the bar would only offer dead ends.
+  if (pathname === '/welcome') return null;
+
   return (
     <header className="sticky top-0 z-40 bg-surface/90 shadow-card backdrop-blur-md">
       <div className="mx-auto flex min-h-[var(--navbar-height)] max-w-5xl items-center justify-between gap-4 px-4 py-3">

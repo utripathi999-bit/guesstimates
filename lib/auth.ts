@@ -1,11 +1,13 @@
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
+import { cookies } from 'next/headers';
 import { NextRequest } from 'next/server';
-import { getRedis, KEYS } from '@/lib/redis';
+import { getRedis, isRedisConfigured, KEYS } from '@/lib/redis';
+import { SESSION_COOKIE_NAME, SESSION_MAX_AGE_SECONDS } from '@/lib/sessionCookie';
 
-export const SESSION_COOKIE_NAME = 'gd_session';
-/** Browsers cap cookie lifetime at ~400 days regardless of what's requested — there's no true "forever" cookie. */
-export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 400;
+// Re-exported so existing callers can keep importing them from here; the
+// definitions live in the Edge-safe module the proxy imports.
+export { SESSION_COOKIE_NAME, SESSION_MAX_AGE_SECONDS };
 
 const BCRYPT_ROUNDS = 10;
 
@@ -67,13 +69,7 @@ export async function destroySession(token: string): Promise<void> {
   await getRedis().del(KEYS.session(token));
 }
 
-/**
- * Resolves the current request's session (if any) to the account it belongs
- * to, and slides the session's expiry forward — so an active visitor stays
- * logged in indefinitely without the cookie itself ever needing to change.
- */
-export async function getSessionAccount(request: NextRequest): Promise<Account | null> {
-  const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+async function resolveSessionToken(token: string | undefined): Promise<Account | null> {
   if (!token) return null;
 
   const redis = getRedis();
@@ -86,4 +82,63 @@ export async function getSessionAccount(request: NextRequest): Promise<Account |
   await redis.expire(KEYS.session(token), SESSION_MAX_AGE_SECONDS);
 
   return { email: account.email, displayName: account.displayName, createdAt: account.createdAt };
+}
+
+/**
+ * Resolves the current request's session (if any) to the account it belongs
+ * to, and slides the session's expiry forward — so an active visitor stays
+ * logged in indefinitely without the cookie itself ever needing to change.
+ */
+export async function getSessionAccount(request: NextRequest): Promise<Account | null> {
+  return resolveSessionToken(request.cookies.get(SESSION_COOKIE_NAME)?.value);
+}
+
+/** Same, for Server Components / pages, which read cookies via next/headers rather than a request object. */
+export async function getSessionAccountFromCookies(): Promise<Account | null> {
+  const cookieStore = await cookies();
+  return resolveSessionToken(cookieStore.get(SESSION_COOKIE_NAME)?.value);
+}
+
+export interface AccountSummary {
+  email: string;
+  displayName: string;
+  createdAt: string;
+}
+
+/**
+ * Every registered account, for the owner-only admin view. Uses SCAN over the
+ * account key prefix rather than maintaining a separate index — no index to
+ * keep in sync, and it picks up accounts created before this existed. Fine at
+ * this scale; would want a real index if the user count ever got large.
+ */
+export async function listAllAccounts(): Promise<AccountSummary[]> {
+  if (!isRedisConfigured()) return [];
+  const redis = getRedis();
+
+  const keys: string[] = [];
+  let cursor = '0';
+  do {
+    const [nextCursor, batch] = await redis.scan(cursor, { match: KEYS.account('*'), count: 200 });
+    keys.push(...batch);
+    cursor = String(nextCursor);
+  } while (cursor !== '0');
+
+  const accounts = await Promise.all(
+    keys.map(async (key) => {
+      const raw = await redis.hgetall<{ email: string; displayName: string; createdAt: string }>(key);
+      if (!raw?.email) return null;
+      return { email: raw.email, displayName: raw.displayName, createdAt: raw.createdAt };
+    })
+  );
+
+  return accounts
+    .filter((a): a is AccountSummary => a !== null)
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+}
+
+/** The single account allowed to see the admin view, configured via env. */
+export function isOwner(account: Account | null): boolean {
+  const ownerEmail = process.env.OWNER_EMAIL;
+  if (!ownerEmail || !account) return false;
+  return normalizeEmail(ownerEmail) === account.email;
 }

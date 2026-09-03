@@ -15,6 +15,17 @@ const DeleteAccountZ = z.object({
 });
 
 /**
+ * Admin authorization: either a signed-in owner session (the /admin UI) or the
+ * CRON_SECRET bearer token, the same service credential the cron and
+ * leaderboard-cleanup endpoints already accept. The token path exists so
+ * operational cleanup doesn't require a browser session.
+ */
+function hasAdminToken(request: NextRequest): boolean {
+  const header = request.headers.get('authorization');
+  return Boolean(process.env.CRON_SECRET && header === `Bearer ${process.env.CRON_SECRET}`);
+}
+
+/**
  * Owner-only: correct a student's display name (typos, nicknames, duplicates).
  * Gated on the session account matching OWNER_EMAIL — same check as /admin.
  */
@@ -60,7 +71,8 @@ export async function PATCH(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   const account = await getSessionAccountFromCookies();
-  if (!isOwner(account)) {
+  const authorized = isOwner(account) || hasAdminToken(request);
+  if (!authorized) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 

@@ -1,7 +1,6 @@
 'use client';
 
 import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
-import { getStreakData } from '@/lib/streakStorage';
 
 export interface AuthAccount {
   email: string;
@@ -32,28 +31,6 @@ async function parseErrorMessage(res: Response): Promise<string> {
   }
 }
 
-/**
- * Pushes the browser's current local streak to the leaderboard. The
- * completion flow already does this the instant both daily questions are
- * solved while signed in — but that's a single point-in-time trigger. If
- * someone solved today's questions *before* signing in (or signs in on a
- * new device that already has a streak), nothing would otherwise ever tell
- * the leaderboard about it. Calling this on every sign-in and on every
- * "already signed in" page load keeps it caught up regardless of ordering.
- */
-function syncLeaderboard() {
-  const { currentStreak, xp } = getStreakData();
-  // Always sync, even at zero: signing up should put you on the board
-  // immediately so the whole batch is visible from day one.
-  fetch('/api/leaderboard', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ points: xp, streak: currentStreak }),
-  }).catch(() => {
-    // Best-effort — local progress is already saved regardless.
-  });
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [account, setAccount] = useState<AuthAccount | null>(null);
   const [loading, setLoading] = useState(true);
@@ -63,7 +40,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await fetch('/api/auth/me');
       const data: { account: AuthAccount | null } = await res.json();
       setAccount(data.account);
-      if (data.account) syncLeaderboard();
     } catch {
       setAccount(null);
     } finally {
@@ -90,7 +66,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!res.ok) return { success: false, error: await parseErrorMessage(res) };
       const data: { account: AuthAccount } = await res.json();
       setAccount(data.account);
-      syncLeaderboard();
       return { success: true };
     },
     []
@@ -105,7 +80,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!res.ok) return { success: false, error: await parseErrorMessage(res) };
     const data: { account: AuthAccount } = await res.json();
     setAccount(data.account);
-    syncLeaderboard();
     return { success: true };
   }, []);
 

@@ -9,27 +9,6 @@ export interface LeaderboardEntry {
   isZero: boolean;
 }
 
-/**
- * Records a user's score. Keyed by normalized email (unique, never shown to
- * other users) rather than display name, since two students can share a name.
- */
-export async function recordUserCompletion(
-  normalizedEmail: string,
-  points: number,
-  currentStreak: number
-): Promise<void> {
-  const pipeline = getRedis().pipeline();
-
-  pipeline.hset(KEYS.userStreak(normalizedEmail), {
-    points,
-    currentStreak,
-    lastUpdated: new Date().toISOString(),
-  });
-  pipeline.zadd(KEYS.leaderboardStreaks, { score: points, member: normalizedEmail });
-
-  await pipeline.exec();
-}
-
 export async function removeUserFromLeaderboard(normalizedEmail: string): Promise<void> {
   const pipeline = getRedis().pipeline();
   pipeline.zrem(KEYS.leaderboardStreaks, normalizedEmail);

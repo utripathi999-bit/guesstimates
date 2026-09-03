@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Nunito } from "next/font/google";
 import { AuthProvider } from "@/components/AuthProvider";
 import { Navbar } from "@/components/Navbar";
+import { ProgressProvider } from "@/components/ProgressProvider";
 import "./globals.css";
 
 const nunito = Nunito({
@@ -11,9 +12,9 @@ const nunito = Nunito({
 });
 
 export const metadata: Metadata = {
-  title: "GuesstimateDaily — Interview Guesstimate Practice",
+  title: "GuessMates — Guesstimates, with your batch",
   description:
-    "Two daily guesstimate interview questions with visual step-by-step breakdowns, streaks, and swipeable fact flashcards.",
+    "Two guesstimate cases a day with an AI interviewer, step-by-step breakdowns, streaks and a batch leaderboard.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -21,8 +22,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en" className={`${nunito.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <AuthProvider>
-          <Navbar />
-          <div className="flex-1">{children}</div>
+          <ProgressProvider>
+            <Navbar />
+            <div className="flex-1">{children}</div>
+          </ProgressProvider>
         </AuthProvider>
       </body>
     </html>

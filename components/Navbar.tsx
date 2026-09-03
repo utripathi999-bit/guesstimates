@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { AuthModal } from '@/components/AuthModal';
 import { useAuth } from '@/components/AuthProvider';
-import { useStreakData } from '@/lib/streakStorage';
+import { useProgress } from '@/components/ProgressProvider';
 
 const NAV_LINKS = [
   { href: '/', label: 'Today', icon: Sparkles },
@@ -17,7 +17,8 @@ const NAV_LINKS = [
 
 export function Navbar() {
   const pathname = usePathname();
-  const { currentStreak, xp } = useStreakData();
+  const { progress } = useProgress();
+  const { currentStreak, points } = progress;
   const { account, loading, logout } = useAuth();
   const [authModalOpen, setAuthModalOpen] = useState(false);
 
@@ -32,7 +33,7 @@ export function Navbar() {
           <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary-dark text-lg shadow-[0_4px_10px_-3px_hsl(96_100%_35%/0.55)]">
             🎯
           </span>
-          <span className="hidden sm:inline">GuesstimateDaily</span>
+          <span className="hidden sm:inline">GuessMates</span>
         </Link>
 
         <nav className="flex items-center gap-1 rounded-2xl bg-background/70 p-1">
@@ -63,7 +64,7 @@ export function Navbar() {
           </div>
           <div className="hidden items-center gap-1 rounded-full bg-gradient-to-br from-[#aee6fd] to-[#7ed2fb] px-3 py-1.5 font-black text-action-dark shadow-[0_3px_8px_-2px_hsl(199_96%_50%/0.4)] sm:flex">
             <Sparkles className="h-5 w-5" strokeWidth={2.5} />
-            <span className="tabular-nums">{xp}</span>
+            <span className="tabular-nums">{points}</span>
           </div>
 
           {!loading && (

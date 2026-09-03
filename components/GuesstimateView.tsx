@@ -3,66 +3,46 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { CheckCircle2, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
-import { AuthModal } from '@/components/AuthModal';
-import { useAuth } from '@/components/AuthProvider';
+import { useEffect, useState } from 'react';
 import { ClarifyingQuestions } from '@/components/ClarifyingQuestions';
+import { useProgress } from '@/components/ProgressProvider';
 import { QuestionRail } from '@/components/QuestionRail';
 import { Scratchpad } from '@/components/Scratchpad';
 import { SolutionViewer } from '@/components/SolutionViewer';
 import { StreakCelebration } from '@/components/StreakCelebration';
 import { Button } from '@/components/ui/Button';
-import { markQuestionCompleted, markQuestionInProgress, toggleBookmark, useStreakData } from '@/lib/streakStorage';
+import { toggleBookmark, useStreakData } from '@/lib/streakStorage';
 import type { Guesstimate } from '@/lib/types';
 
 interface GuesstimateViewProps {
   guesstimate: Guesstimate;
-  /** Today's pair, resolved server-side — the streak logic needs to know what "both done" means. */
-  todaysIds: string[];
 }
 
-export function GuesstimateView({ guesstimate, todaysIds }: GuesstimateViewProps) {
+export function GuesstimateView({ guesstimate }: GuesstimateViewProps) {
   const router = useRouter();
-  const streak = useStreakData();
-  const { account } = useAuth();
+  const { statusOf, attempt, solve } = useProgress();
+  // Bookmarks stay per-device — they're a personal reading aid, not scored progress.
+  const localPrefs = useStreakData();
 
   const [revealed, setRevealed] = useState(false);
-  const [celebration, setCelebration] = useState<{ streak: number; freezeUsed: boolean; needsSignIn: boolean } | null>(
-    null
-  );
-  const [authPromptOpen, setAuthPromptOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [celebration, setCelebration] = useState<{ streak: number; freezeUsed: boolean } | null>(null);
 
-  const bookmarked = streak.bookmarkedIds.includes(guesstimate.id);
-  const status = useMemo(() => {
-    if (streak.completedQuestionIds.includes(guesstimate.id)) return 'Completed' as const;
-    if (streak.inProgressIds.includes(guesstimate.id)) return 'In Progress' as const;
-    return 'Unsolved' as const;
-  }, [guesstimate.id, streak.completedQuestionIds, streak.inProgressIds]);
+  const bookmarked = localPrefs.bookmarkedIds.includes(guesstimate.id);
+  const status = statusOf(guesstimate.id);
 
-  // Side effect only — writes to the external store, doesn't setState here.
-  // `status` reacts automatically once useStreakData re-syncs.
+  // Side effect only — reports the attempt to the server, which decides
+  // whether it's worth anything. `attempt` is a no-op once already recorded.
   useEffect(() => {
-    if (status === 'Unsolved') {
-      markQuestionInProgress(guesstimate.id);
-    }
-  }, [guesstimate.id, status]);
+    attempt(guesstimate.id);
+  }, [attempt, guesstimate.id]);
 
-  function handleMarkSolved() {
-    const result = markQuestionCompleted(guesstimate.id, todaysIds);
-    if (result.dailyGoalJustCompleted) {
-      setCelebration({ streak: result.data.currentStreak, freezeUsed: result.freezeUsed, needsSignIn: !account });
-    }
-
-    // Sync on every solve, not only when the daily goal completes — points are
-    // earned per question now, so the board would lag a day behind otherwise.
-    if (account) {
-      fetch('/api/leaderboard', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ points: result.data.xp, streak: result.data.currentStreak }),
-      }).catch(() => {
-        // Best-effort — the local progress is already saved regardless.
-      });
+  async function handleMarkSolved() {
+    setSaving(true);
+    const outcome = await solve(guesstimate.id);
+    setSaving(false);
+    if (outcome?.dailyGoalJustCompleted) {
+      setCelebration({ streak: outcome.streak, freezeUsed: outcome.freezeUsed });
     }
   }
 
@@ -100,11 +80,7 @@ export function GuesstimateView({ guesstimate, todaysIds }: GuesstimateViewProps
 
           <AnimatePresence>
             {revealed && (
-              <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.35 }}
-              >
+              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
                 <SolutionViewer guesstimate={guesstimate} />
 
                 <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-between">
@@ -112,9 +88,15 @@ export function GuesstimateView({ guesstimate, todaysIds }: GuesstimateViewProps
                     Back to Today
                   </Button>
                   {status !== 'Completed' && (
-                    <Button variant="primary" size="lg" onClick={handleMarkSolved} className="w-full sm:w-auto">
+                    <Button
+                      variant="primary"
+                      size="lg"
+                      onClick={handleMarkSolved}
+                      disabled={saving}
+                      className="w-full sm:w-auto"
+                    >
                       <CheckCircle2 className="h-5 w-5" />
-                      Mark as Solved
+                      {saving ? 'Saving...' : 'Mark as Solved'}
                     </Button>
                   )}
                 </div>
@@ -129,13 +111,7 @@ export function GuesstimateView({ guesstimate, todaysIds }: GuesstimateViewProps
         onClose={() => setCelebration(null)}
         streak={celebration?.streak ?? 0}
         freezeUsed={celebration?.freezeUsed ?? false}
-        needsSignIn={celebration?.needsSignIn ?? false}
-        onSignInClick={() => {
-          setCelebration(null);
-          setAuthPromptOpen(true);
-        }}
       />
-      <AuthModal open={authPromptOpen} onClose={() => setAuthPromptOpen(false)} />
     </main>
   );
 }

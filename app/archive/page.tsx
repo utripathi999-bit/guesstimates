@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { guesstimates } from '@/lib/dailyPicker';
-import { useStreakData } from '@/lib/streakStorage';
+import { useProgress } from '@/components/ProgressProvider';
 import type {
   GuesstimateApproach,
   GuesstimateCategory,
@@ -52,17 +52,13 @@ export default function ArchivePage() {
   const [category, setCategory] = useState<GuesstimateCategory | null>(null);
   const [difficulty, setDifficulty] = useState<GuesstimateDifficulty | null>(null);
   const [approach, setApproach] = useState<GuesstimateApproach | null>(null);
-  const streak = useStreakData();
+  const { statusOf } = useProgress();
 
   const statuses = useMemo<Record<string, QuestionStatus>>(() => {
     const map: Record<string, QuestionStatus> = {};
-    for (const g of guesstimates) {
-      if (streak.completedQuestionIds.includes(g.id)) map[g.id] = 'Completed';
-      else if (streak.inProgressIds.includes(g.id)) map[g.id] = 'In Progress';
-      else map[g.id] = 'Unsolved';
-    }
+    for (const g of guesstimates) map[g.id] = statusOf(g.id);
     return map;
-  }, [streak.completedQuestionIds, streak.inProgressIds]);
+  }, [statusOf]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();

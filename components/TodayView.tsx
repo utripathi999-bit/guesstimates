@@ -7,7 +7,7 @@ import { useMemo } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Progress } from '@/components/ui/Progress';
-import { useStreakData } from '@/lib/streakStorage';
+import { useProgress } from '@/components/ProgressProvider';
 import type { Guesstimate, QuestionStatus } from '@/lib/types';
 
 const STATUS_META: Record<QuestionStatus, { icon: typeof Circle; className: string }> = {
@@ -60,23 +60,19 @@ interface TodayViewProps {
 }
 
 export function TodayView({ dailyPair, source }: TodayViewProps) {
-  const streak = useStreakData();
+  const { progress, statusOf } = useProgress();
   const statuses = useMemo<Record<string, QuestionStatus>>(() => {
     const map: Record<string, QuestionStatus> = {};
-    for (const g of dailyPair) {
-      if (streak.completedQuestionIds.includes(g.id)) map[g.id] = 'Completed';
-      else if (streak.inProgressIds.includes(g.id)) map[g.id] = 'In Progress';
-      else map[g.id] = 'Unsolved';
-    }
+    for (const g of dailyPair) map[g.id] = statusOf(g.id);
     return map;
-  }, [dailyPair, streak.completedQuestionIds, streak.inProgressIds]);
+  }, [dailyPair, statusOf]);
 
   const completedToday = dailyPair.filter((g) => statuses[g.id] === 'Completed').length;
   const statValues: Record<(typeof STAT_TILES)[number]['key'], number> = {
-    currentStreak: streak.currentStreak,
-    longestStreak: streak.longestStreak,
-    xp: streak.xp,
-    freezesAvailable: streak.freezesAvailable,
+    currentStreak: progress.currentStreak,
+    longestStreak: progress.longestStreak,
+    xp: progress.points,
+    freezesAvailable: progress.freezesAvailable,
   };
 
   return (

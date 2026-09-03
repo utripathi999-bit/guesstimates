@@ -1,14 +1,14 @@
 import Link from 'next/link';
 import { GuesstimateView } from '@/components/GuesstimateView';
 import { Button } from '@/components/ui/Button';
-import { getDailyPair, getQuestionById } from '@/lib/questionStore';
+import { getQuestionById } from '@/lib/questionStore';
 
 // Questions can be AI-generated and stored in Redis, so this resolves per-request.
 export const dynamic = 'force-dynamic';
 
 export default async function GuesstimatePage({ params }: PageProps<'/guesstimate/[id]'>) {
   const { id } = await params;
-  const [guesstimate, daily] = await Promise.all([getQuestionById(id), getDailyPair()]);
+  const guesstimate = await getQuestionById(id);
 
   if (!guesstimate) {
     return (
@@ -22,5 +22,5 @@ export default async function GuesstimatePage({ params }: PageProps<'/guesstimat
     );
   }
 
-  return <GuesstimateView guesstimate={guesstimate} todaysIds={daily.questions.map((q) => q.id)} />;
+  return <GuesstimateView guesstimate={guesstimate} />;
 }

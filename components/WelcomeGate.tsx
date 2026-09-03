@@ -50,7 +50,7 @@ export function WelcomeGate() {
           <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary-dark text-xl shadow-[0_4px_10px_-3px_hsl(96_100%_35%/0.55)]">
             🎯
           </span>
-          GuesstimateDaily
+          GuessMates
         </div>
         <h1 className="text-display text-3xl font-black leading-tight text-foreground sm:text-4xl">
           Practise guesstimates like it&apos;s the real interview.

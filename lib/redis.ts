@@ -45,6 +45,13 @@ export const KEYS = {
   /** Hash of a single user's streak state. e.g. user:abc123:streak */
   userStreak: (userId: string): string => `user:${userId}:streak`,
 
+  /**
+   * Authoritative per-account progress: solved/attempted questions, points,
+   * streak. Server-owned — the client never writes a score here, it only
+   * reports actions and the server scores them.
+   */
+  userProgress: (normalizedEmail: string): string => `user:${normalizedEmail}:progress`,
+
   /** Sorted set: member = userId, score = currentStreak. */
   leaderboardStreaks: 'leaderboard:streaks' as const,
 

@@ -42,14 +42,15 @@ async function parseErrorMessage(res: Response): Promise<string> {
  * "already signed in" page load keeps it caught up regardless of ordering.
  */
 function syncLeaderboard() {
-  const { currentStreak } = getStreakData();
-  if (currentStreak <= 0) return;
+  const { currentStreak, xp } = getStreakData();
+  // Always sync, even at zero: signing up should put you on the board
+  // immediately so the whole batch is visible from day one.
   fetch('/api/leaderboard', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ streak: currentStreak }),
+    body: JSON.stringify({ points: xp, streak: currentStreak }),
   }).catch(() => {
-    // Best-effort — local streak is already saved regardless.
+    // Best-effort — local progress is already saved regardless.
   });
 }
 

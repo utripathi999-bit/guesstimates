@@ -6,7 +6,8 @@ import { recordUserCompletion, removeUserFromLeaderboard } from '@/lib/leaderboa
 export const dynamic = 'force-dynamic';
 
 const RecordCompletionZ = z.object({
-  streak: z.number().int().min(0),
+  points: z.number().int().min(0).max(1_000_000),
+  streak: z.number().int().min(0).max(10_000),
 });
 
 const DeleteEntryZ = z.object({
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await recordUserCompletion(account.email, validation.data.streak);
+    await recordUserCompletion(account.email, validation.data.points, validation.data.streak);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('leaderboard record failed:', error);

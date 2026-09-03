@@ -26,6 +26,22 @@
      of guessing an offset. */
   --navbar-height: 64px;
 
+  /* Callout surfaces. These MUST be theme-aware: a hardcoded light panel with
+     adaptive `text-foreground` inside it becomes near-white text on pale green
+     the moment dark mode kicks in. Background and text are defined together
+     per tone so they can never drift apart. */
+  --callout-success: #f0fdf6;
+  --callout-success-edge: #e3f8cc;
+  --callout-success-text: #05704e;
+  --callout-warn: #fffbf0;
+  --callout-warn-edge: #fff4cc;
+  --callout-warn-text: #7a5b00;
+  --callout-info: #eaf7fe;
+  --callout-info-text: #0a5b82;
+  --callout-danger: #fff0f0;
+  --callout-danger-edge: #ffe0e0;
+  --callout-danger-text: #b3261e;
+
   --shadow-ambient: 43 30% 20%;
   --shadow-primary: 96 100% 40%;
   --shadow-accent: 45 100% 50%;
@@ -52,6 +68,17 @@
   --color-surface: var(--surface);
   --color-surface-border: var(--surface-border);
   --color-text-muted: var(--text-muted);
+  --color-callout-success: var(--callout-success);
+  --color-callout-success-edge: var(--callout-success-edge);
+  --color-callout-success-text: var(--callout-success-text);
+  --color-callout-warn: var(--callout-warn);
+  --color-callout-warn-edge: var(--callout-warn-edge);
+  --color-callout-warn-text: var(--callout-warn-text);
+  --color-callout-info: var(--callout-info);
+  --color-callout-info-text: var(--callout-info-text);
+  --color-callout-danger: var(--callout-danger);
+  --color-callout-danger-edge: var(--callout-danger-edge);
+  --color-callout-danger-text: var(--callout-danger-text);
   --font-sans: var(--font-nunito);
   --animate-pop: pop 0.2s ease-out;
   --animate-flame-flicker: flame-flicker 1.6s ease-in-out infinite;
@@ -67,6 +94,20 @@
     --surface-border: #2b3a3f;
     --text-muted: #93a1a3;
     --shadow-ambient: 190 40% 2%;
+
+    /* Dark equivalents: deep tinted panels with light tinted text, so the same
+       markup stays legible without every component needing a dark: variant. */
+    --callout-success: #10291d;
+    --callout-success-edge: #14351f;
+    --callout-success-text: #7fe3ab;
+    --callout-warn: #2a2415;
+    --callout-warn-edge: #342b17;
+    --callout-warn-text: #f2d182;
+    --callout-info: #11242e;
+    --callout-info-text: #90d4f2;
+    --callout-danger: #2c1a1a;
+    --callout-danger-edge: #361d1d;
+    --callout-danger-text: #f7a8a8;
   }
 }
 

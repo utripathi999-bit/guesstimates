@@ -58,7 +58,7 @@ export function StreakCelebration({ open, onClose, streak, freezeUsed, needsSign
         {needsSignIn && (
           <button
             onClick={onSignInClick}
-            className="shadow-card flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[#fffbf0] to-[#fff4cc] px-3 py-2.5 text-sm font-bold text-accent-dark"
+            className="shadow-card flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-callout-warn to-callout-warn-edge px-3 py-2.5 text-sm font-bold text-callout-warn-text"
           >
             <LogIn className="h-4 w-4" strokeWidth={2.5} />
             Sign in to save this streak to the leaderboard

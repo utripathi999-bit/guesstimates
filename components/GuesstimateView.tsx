@@ -51,15 +51,18 @@ export function GuesstimateView({ guesstimate, todaysIds }: GuesstimateViewProps
     const result = markQuestionCompleted(guesstimate.id, todaysIds);
     if (result.dailyGoalJustCompleted) {
       setCelebration({ streak: result.data.currentStreak, freezeUsed: result.freezeUsed, needsSignIn: !account });
-      if (account) {
-        fetch('/api/leaderboard', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ streak: result.data.currentStreak }),
-        }).catch(() => {
-          // Best-effort — the local streak is already saved regardless.
-        });
-      }
+    }
+
+    // Sync on every solve, not only when the daily goal completes — points are
+    // earned per question now, so the board would lag a day behind otherwise.
+    if (account) {
+      fetch('/api/leaderboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ points: result.data.xp, streak: result.data.currentStreak }),
+      }).catch(() => {
+        // Best-effort — the local progress is already saved regardless.
+      });
     }
   }
 
@@ -74,7 +77,7 @@ export function GuesstimateView({ guesstimate, todaysIds }: GuesstimateViewProps
 
         <div className="flex min-w-0 flex-col">
           {status === 'Completed' && (
-            <div className="shadow-card mb-6 flex items-center gap-2 rounded-2xl bg-gradient-to-br from-[#f0fdf6] to-[#e3f8cc] px-4 py-3 font-bold text-factual-dark">
+            <div className="shadow-card mb-6 flex items-center gap-2 rounded-2xl bg-gradient-to-br from-callout-success to-callout-success-edge px-4 py-3 font-bold text-callout-success-text">
               <CheckCircle2 className="h-5 w-5 shrink-0" strokeWidth={2.5} />
               You&apos;ve already completed this one — revisit the solution any time.
             </div>

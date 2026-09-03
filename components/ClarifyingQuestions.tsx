@@ -92,7 +92,7 @@ export function ClarifyingQuestions({ guesstimateId, suggestedQuestions }: Clari
                 key={q}
                 onClick={() => ask(q)}
                 disabled={asking || askedQuestions.has(q)}
-                className="rounded-full border border-action/30 bg-[#eaf7fe] px-3 py-1.5 text-xs font-bold text-action-dark transition-colors hover:bg-[#d3eefd] disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-full border border-action/30 bg-callout-info px-3 py-1.5 text-xs font-bold text-callout-info-text transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {q}
               </button>
@@ -121,7 +121,7 @@ export function ClarifyingQuestions({ guesstimateId, suggestedQuestions }: Clari
                     )}
                     {t.status === 'done' && <p className="text-sm text-foreground">{t.answer}</p>}
                     {t.status === 'error' && (
-                      <p className="text-sm text-danger-dark">
+                      <p className="text-sm text-callout-danger-text">
                         {t.errorMessage ?? "Couldn't reach the interviewer — try again."}
                       </p>
                     )}

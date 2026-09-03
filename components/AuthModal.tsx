@@ -59,7 +59,7 @@ export function AuthModal({ open, onClose }: AuthModalProps) {
           <p className="mt-1 text-sm text-text-muted">
             {mode === 'login'
               ? 'Sign in to save your streak to the leaderboard.'
-              : 'Pick a name others will see on the leaderboard.'}
+              : 'Use your real first name — your batch sees it on the leaderboard.'}
           </p>
         </div>
 
@@ -71,7 +71,7 @@ export function AuthModal({ open, onClose }: AuthModalProps) {
                 type="text"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="Display name"
+                placeholder="Your first name"
                 required
                 minLength={2}
                 maxLength={40}
@@ -106,10 +106,10 @@ export function AuthModal({ open, onClose }: AuthModalProps) {
               className="w-full rounded-xl bg-background py-2.5 pl-10 pr-3 text-sm outline-none ring-1 ring-inset ring-surface-border focus:ring-2 focus:ring-action"
             />
           </div>
-          {mode === 'signup' && <p className="-mt-1 text-xs text-text-muted">At least 8 characters.</p>}
+          {mode === 'signup' && <p className="-mt-1 text-xs text-text-muted">Password must be at least 8 characters.</p>}
 
           {error && (
-            <div className="shadow-card rounded-xl bg-[#fff0f0] px-3 py-2 text-sm text-danger-dark">{error}</div>
+            <div className="shadow-card rounded-xl bg-callout-danger px-3 py-2 text-sm text-callout-danger-text">{error}</div>
           )}
 
           <Button type="submit" variant="action" size="md" disabled={submitting} className="mt-1 w-full">

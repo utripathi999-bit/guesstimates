@@ -3,8 +3,26 @@ import { getLocalDateString } from '@/lib/dailyPicker';
 import type { QuestionStatus, StreakData } from '@/lib/types';
 
 const STORAGE_KEY = 'guesstimateDaily:v1';
-const XP_PER_QUESTION = 20;
-const XP_STREAK_BONUS = 30;
+
+/**
+ * Scoring. Deliberately rewards showing up and attempting, not just finishing:
+ * a student who opens a hard case and works at it earns something even if they
+ * never mark it solved. Hints and feedback are always free — using the tools
+ * you're meant to learn from should never cost points.
+ */
+export const POINTS = {
+  /** Opening a question and starting work on it. Once per question, ever. */
+  ATTEMPT: 5,
+  /** Marking a single guesstimate solved. */
+  SOLVE: 20,
+  /** On top of the per-question points, for finishing both of the day's questions. */
+  BOTH_IN_A_DAY: 30,
+  /** Per consecutive day, awarded when the daily goal completes — grows with the streak. */
+  PER_STREAK_DAY: 5,
+  /** Ceiling on the streak multiplier, so a long streak can't run away with the board. */
+  MAX_STREAK_MULTIPLIER: 10,
+} as const;
+
 const STARTING_FREEZES = 1;
 
 const DEFAULT_STATE: StreakData = {
@@ -16,6 +34,7 @@ const DEFAULT_STATE: StreakData = {
   freezesAvailable: STARTING_FREEZES,
   freezesUsedDates: [],
   completedQuestionIds: [],
+  attemptedQuestionIds: [],
   bookmarkedIds: [],
   inProgressIds: [],
   scratchpadNotes: {},
@@ -64,12 +83,14 @@ export interface CompletionResult {
   dailyGoalJustCompleted: boolean;
   streakIncreased: boolean;
   freezeUsed: boolean;
+  /** Points earned by this action, for showing the student what they just gained. */
+  pointsEarned: number;
 }
 
 /**
- * Marks a question completed, awards question XP, and — if this completes
- * both of today's daily questions for the first time — advances the streak,
- * consuming a freeze automatically if exactly one day was missed.
+ * Marks a question completed, awards points, and — if this completes both of
+ * today's daily questions for the first time — advances the streak, consuming
+ * a freeze automatically if exactly one day was missed.
  *
  * `todaysIds` is passed in rather than derived here: today's pair may be
  * AI-generated and resolved server-side, so the client can't compute it.
@@ -77,12 +98,13 @@ export interface CompletionResult {
 export function markQuestionCompleted(questionId: string, todaysIds: string[]): CompletionResult {
   const data = getStreakData();
   const today = getLocalDateString();
+  let pointsEarned = 0;
 
   const alreadyCompleted = data.completedQuestionIds.includes(questionId);
   if (!alreadyCompleted) {
     data.completedQuestionIds.push(questionId);
     data.totalCompleted += 1;
-    data.xp += XP_PER_QUESTION;
+    pointsEarned += POINTS.SOLVE;
   }
   data.inProgressIds = data.inProgressIds.filter((id) => id !== questionId);
 
@@ -95,7 +117,7 @@ export function markQuestionCompleted(questionId: string, todaysIds: string[]): 
 
   if (bothTodaysDone && !alreadyCountedToday) {
     dailyGoalJustCompleted = true;
-    data.xp += XP_STREAK_BONUS;
+    pointsEarned += POINTS.BOTH_IN_A_DAY;
     data.dailyCompletionDates.push(today);
 
     if (data.lastCompletedDate === null) {
@@ -119,20 +141,43 @@ export function markQuestionCompleted(questionId: string, todaysIds: string[]): 
       // gap === 0 shouldn't happen given alreadyCountedToday check above.
     }
 
+    // Back-to-back days are worth more. Capped so a long streak doesn't make
+    // the board unwinnable for someone who joins late; a broken streak resets
+    // currentStreak to 1 above, so this naturally restarts small too.
+    const streakMultiplier = Math.min(data.currentStreak, POINTS.MAX_STREAK_MULTIPLIER);
+    pointsEarned += streakMultiplier * POINTS.PER_STREAK_DAY;
+
     data.longestStreak = Math.max(data.longestStreak, data.currentStreak);
     data.lastCompletedDate = today;
   }
 
+  data.xp += pointsEarned;
   saveStreakData(data);
-  return { data, dailyGoalJustCompleted, streakIncreased, freezeUsed };
+  return { data, dailyGoalJustCompleted, streakIncreased, freezeUsed, pointsEarned };
 }
 
+/**
+ * Records that a question has been opened and started. Awards attempt points
+ * once per question — `attemptedQuestionIds` tracks that separately from
+ * `inProgressIds`, which empties out on completion, so re-opening a solved
+ * question can't farm points.
+ */
 export function markQuestionInProgress(questionId: string): StreakData {
   const data = getStreakData();
+  let changed = false;
+
+  if (!data.attemptedQuestionIds.includes(questionId)) {
+    data.attemptedQuestionIds.push(questionId);
+    data.xp += POINTS.ATTEMPT;
+    changed = true;
+  }
+
   if (!data.completedQuestionIds.includes(questionId) && !data.inProgressIds.includes(questionId)) {
     data.inProgressIds.push(questionId);
-    saveStreakData(data);
+    changed = true;
   }
+
+  if (changed) saveStreakData(data);
   return data;
 }
 

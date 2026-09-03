@@ -126,13 +126,13 @@ export function Scratchpad({ questionId }: ScratchpadProps) {
       </p>
 
       {hint && (
-        <div className="animate-slide-up shadow-card mt-3 flex gap-2 rounded-xl bg-gradient-to-br from-[#fff9e6] to-[#fff0c2] p-3 text-sm text-[#7a5b00]">
+        <div className="animate-slide-up shadow-card mt-3 flex gap-2 rounded-xl bg-gradient-to-br from-callout-warn to-callout-warn-edge p-3 text-sm text-callout-warn-text">
           <Lightbulb className="h-4 w-4 shrink-0 translate-y-0.5" strokeWidth={2.5} />
           <p>{hint}</p>
         </div>
       )}
       {hintError && (
-        <div className="animate-slide-up shadow-card mt-3 rounded-xl bg-[#fff0f0] p-3 text-sm text-danger-dark">
+        <div className="animate-slide-up shadow-card mt-3 rounded-xl bg-callout-danger p-3 text-sm text-callout-danger-text">
           {hintError}
         </div>
       )}
@@ -140,7 +140,7 @@ export function Scratchpad({ questionId }: ScratchpadProps) {
       {feedback && (
         <div className="animate-slide-up mt-3 flex flex-col gap-2">
           {feedback.strengths.length > 0 && (
-            <div className="shadow-card flex flex-col gap-1.5 rounded-xl bg-gradient-to-br from-[#f0fdf6] to-[#e3f8cc] p-3 text-sm text-factual-dark">
+            <div className="shadow-card flex flex-col gap-1.5 rounded-xl bg-gradient-to-br from-callout-success to-callout-success-edge p-3 text-sm text-callout-success-text">
               {feedback.strengths.map((s, i) => (
                 <div key={i} className="flex items-start gap-2">
                   <CheckCircle2 className="h-4 w-4 shrink-0 translate-y-0.5" strokeWidth={2.5} />
@@ -150,7 +150,7 @@ export function Scratchpad({ questionId }: ScratchpadProps) {
             </div>
           )}
           {feedback.gaps.length > 0 && (
-            <div className="shadow-card flex flex-col gap-1.5 rounded-xl bg-gradient-to-br from-[#fff0f0] to-[#ffe0e0] p-3 text-sm text-danger-dark">
+            <div className="shadow-card flex flex-col gap-1.5 rounded-xl bg-gradient-to-br from-callout-danger to-callout-danger-edge p-3 text-sm text-callout-danger-text">
               {feedback.gaps.map((g, i) => (
                 <div key={i} className="flex items-start gap-2">
                   <AlertTriangle className="h-4 w-4 shrink-0 translate-y-0.5" strokeWidth={2.5} />
@@ -162,7 +162,7 @@ export function Scratchpad({ questionId }: ScratchpadProps) {
         </div>
       )}
       {feedbackError && (
-        <div className="animate-slide-up shadow-card mt-3 rounded-xl bg-[#fff0f0] p-3 text-sm text-danger-dark">
+        <div className="animate-slide-up shadow-card mt-3 rounded-xl bg-callout-danger p-3 text-sm text-callout-danger-text">
           {feedbackError}
         </div>
       )}

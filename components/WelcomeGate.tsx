@@ -77,7 +77,7 @@ export function WelcomeGate() {
           {mode === 'login' ? 'Welcome back' : 'Create your account'}
         </h2>
         <p className="mt-1 text-sm text-text-muted">
-          {mode === 'login' ? 'Sign in to pick up your streak.' : 'Pick a name others will see on the leaderboard.'}
+          {mode === 'login' ? 'Sign in to pick up your streak.' : 'Use your real first name — your batch sees it on the leaderboard.'}
         </p>
 
         <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-3">
@@ -88,7 +88,7 @@ export function WelcomeGate() {
                 type="text"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="Display name"
+                placeholder="Your first name"
                 required
                 minLength={2}
                 maxLength={40}
@@ -123,9 +123,9 @@ export function WelcomeGate() {
               className="w-full rounded-xl bg-background py-2.5 pl-10 pr-3 text-sm outline-none ring-1 ring-inset ring-surface-border focus:ring-2 focus:ring-action"
             />
           </div>
-          {mode === 'signup' && <p className="-mt-1 text-xs text-text-muted">At least 8 characters.</p>}
+          {mode === 'signup' && <p className="-mt-1 text-xs text-text-muted">Password must be at least 8 characters.</p>}
 
-          {error && <div className="rounded-xl bg-[#fff0f0] px-3 py-2 text-sm text-danger-dark">{error}</div>}
+          {error && <div className="rounded-xl bg-callout-danger px-3 py-2 text-sm text-callout-danger-text">{error}</div>}
 
           <Button type="submit" variant="primary" size="md" disabled={submitting} className="mt-1 w-full">
             {submitting && <Loader2 className="h-4 w-4 animate-spin" />}

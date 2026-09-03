@@ -87,9 +87,9 @@ export function SolutionViewer({ guesstimate }: SolutionViewerProps) {
                         </li>
                       ))}
                     </ul>
-                    <div className="mt-3 flex items-center justify-between rounded-lg bg-[#eaf7fe] px-3 py-2">
-                      <span className="font-mono text-xs text-text-muted">{step.calculation}</span>
-                      <span className="font-black text-action-dark">{step.result}</span>
+                    <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-callout-info px-3 py-2 text-callout-info-text">
+                      <span className="font-mono text-xs opacity-80">{step.calculation}</span>
+                      <span className="font-black">{step.result}</span>
                     </div>
                   </div>
                 )}
@@ -99,23 +99,23 @@ export function SolutionViewer({ guesstimate }: SolutionViewerProps) {
         </div>
       </div>
 
-      <div className="shadow-card rounded-2xl bg-gradient-to-br from-[#f0fdf6] to-[#e3f8cc] p-5">
-        <div className="mb-2 flex items-center gap-2 font-black text-factual-dark">
+      <div className="shadow-card rounded-2xl bg-gradient-to-br from-callout-success to-callout-success-edge p-5 text-callout-success-text">
+        <div className="mb-2 flex items-center gap-2 font-black">
           <ShieldCheck className="h-5 w-5" strokeWidth={2.5} />
           Sanity Check
         </div>
-        <p className="text-sm text-foreground">{guesstimate.sanityCheck}</p>
+        <p className="text-sm">{guesstimate.sanityCheck}</p>
       </div>
 
-      <div className="shadow-card rounded-2xl bg-gradient-to-br from-[#fffbf0] to-[#fff4cc] p-5">
-        <div className="mb-2 flex items-center gap-2 font-black text-accent-dark">
+      <div className="shadow-card rounded-2xl bg-gradient-to-br from-callout-warn to-callout-warn-edge p-5 text-callout-warn-text">
+        <div className="mb-2 flex items-center gap-2 font-black">
           <Lightbulb className="h-5 w-5" strokeWidth={2.5} />
           Interviewer Tips
         </div>
         <ul className="flex flex-col gap-2">
           {guesstimate.interviewerTips.map((tip, i) => (
-            <li key={i} className="flex items-start gap-2 text-sm text-foreground">
-              <CircleCheckBig className="mt-0.5 h-4 w-4 shrink-0 text-accent-dark" strokeWidth={2.5} />
+            <li key={i} className="flex items-start gap-2 text-sm">
+              <CircleCheckBig className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2.5} />
               {tip}
             </li>
           ))}

@@ -67,6 +67,8 @@ export interface StreakData {
   freezesAvailable: number;
   freezesUsedDates: string[];
   completedQuestionIds: string[];
+  /** Every question ever opened — attempt points are awarded once per id. */
+  attemptedQuestionIds: string[];
   bookmarkedIds: string[];
   inProgressIds: string[];
   scratchpadNotes: Record<string, string>;

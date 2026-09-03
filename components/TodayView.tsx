@@ -125,7 +125,7 @@ export function TodayView({ dailyPair, source }: TodayViewProps) {
       </div>
 
       {completedToday === 2 && (
-        <div className="animate-slide-up shadow-card mt-8 flex items-center gap-3 rounded-2xl bg-gradient-to-br from-[#f0fdf6] to-[#e3f8cc] p-5">
+        <div className="animate-slide-up shadow-card mt-8 flex items-center gap-3 rounded-2xl bg-gradient-to-br from-callout-success to-callout-success-edge p-5 text-callout-success-text">
           <CheckCircle2 className="h-6 w-6 shrink-0 text-factual-dark" strokeWidth={2.5} />
           <p className="text-sm font-bold text-factual-dark">
             You&apos;ve completed both of today&apos;s guesstimates. Come back tomorrow to keep your streak alive!

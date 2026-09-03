@@ -49,10 +49,14 @@ export async function getFullLeaderboard(): Promise<LeaderboardEntry[]> {
 
   return accounts
     .map((account, i) => ({
-      displayName: account.displayName,
+      // String() again rather than trusting the caller: this sort is the one
+      // place a stray non-string took the whole leaderboard down for everyone.
+      displayName: String(account.displayName ?? ''),
       points: scores[i].points,
       streak: scores[i].streak,
       isZero: scores[i].points === 0,
     }))
-    .sort((a, b) => b.points - a.points || b.streak - a.streak || a.displayName.localeCompare(b.displayName));
+    .sort(
+      (a, b) => b.points - a.points || b.streak - a.streak || String(a.displayName).localeCompare(String(b.displayName))
+    );
 }

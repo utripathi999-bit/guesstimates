@@ -33,14 +33,27 @@ function generateSessionToken(): string {
   return randomBytes(32).toString('hex');
 }
 
+/**
+ * Upstash deserializes hash values, so an all-numeric string written as a
+ * display name ("1234567") comes back as the NUMBER 1234567. Anything that
+ * then treats it as a string — localeCompare, slice — throws. Coerce at the
+ * read boundary so the rest of the app can rely on these being strings.
+ */
+function asString(value: unknown): string {
+  return typeof value === 'string' ? value : value == null ? '' : String(value);
+}
+
 export async function getAccountByEmail(
   normalizedEmail: string
 ): Promise<(Account & { passwordHash: string }) | null> {
-  const raw = await getRedis().hgetall<{ email: string; displayName: string; passwordHash: string; createdAt: string }>(
-    KEYS.account(normalizedEmail)
-  );
+  const raw = await getRedis().hgetall<Record<string, unknown>>(KEYS.account(normalizedEmail));
   if (!raw || !raw.passwordHash) return null;
-  return raw;
+  return {
+    email: asString(raw.email),
+    displayName: asString(raw.displayName),
+    passwordHash: asString(raw.passwordHash),
+    createdAt: asString(raw.createdAt),
+  };
 }
 
 export async function createAccount(email: string, password: string, displayName: string): Promise<Account> {
@@ -125,9 +138,15 @@ export async function listAllAccounts(): Promise<AccountSummary[]> {
 
   const accounts = await Promise.all(
     keys.map(async (key) => {
-      const raw = await redis.hgetall<{ email: string; displayName: string; createdAt: string }>(key);
+      const raw = await redis.hgetall<Record<string, unknown>>(key);
       if (!raw?.email) return null;
-      return { email: raw.email, displayName: raw.displayName, createdAt: raw.createdAt };
+      // Coerced for the same reason as above — a numeric-looking display name
+      // comes back as a number and breaks every string operation downstream.
+      return {
+        email: asString(raw.email),
+        displayName: asString(raw.displayName),
+        createdAt: asString(raw.createdAt),
+      };
     })
   );
 

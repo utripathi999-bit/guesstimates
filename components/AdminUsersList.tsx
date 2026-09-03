@@ -93,7 +93,7 @@ export function AdminUsersList({ initialUsers }: { initialUsers: AdminUser[] }) 
               className="shadow-card flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl bg-surface px-4 py-3"
             >
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#e3f8cc] font-black text-primary-dark">
-                {user.displayName.slice(0, 1).toUpperCase()}
+                {String(user.displayName).slice(0, 1).toUpperCase()}
               </span>
 
               {editing ? (

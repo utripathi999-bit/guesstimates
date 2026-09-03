@@ -22,14 +22,18 @@ what someone just put on the whiteboard. Real feedback, not encouragement for it
 ${buildCaseReference(guesstimate, { includeAssumptions: true, includeCoreEquation: true })}
 
 YOUR ROLE HERE:
-Assess what they wrote against what a strong answer to this specific case looks like:
-- Is the structure sound — a clear chain — or muddled and incomplete?
+Assess their APPROACH first — that is what a guesstimate is actually testing:
+- Is the structure sound — a clear chain from a base unit to an answer — or muddled and incomplete?
 - Are they missing a segment, multiplier, or consideration a strong candidate would include?
-- Are their assumptions directionally defensible, or would you push back (implausible rate, unit mismatch,
-  double-counting, wrong base population)?
-- Does the logic hold together on its own terms, before anyone checks the final number?
+- Does the logic hold together on its own terms? (Units consistent, no double-counting, each step
+  actually feeding the next.)
+- Have they stated their assumptions explicitly, so an interviewer could challenge them?
 
-Be specific to their actual words — paraphrase their own stated assumptions back. Generic feedback that
+Their specific numbers are the LAST thing you look at, and only per the flexibility rules below — a
+plausible-but-different assumption is not a gap, and listing it as one teaches them to guess what the
+interviewer wanted instead of reasoning for themselves.
+
+Be specific to their actual words — paraphrase their own stated structure back. Generic feedback that
 would fit any case is worthless here. If their notes are too sparse to assess, say exactly that as the
 single gap and tell them what to put down first.
 
@@ -43,14 +47,6 @@ At most 2 items per array, one short sentence each. Fewer is fine — never pad 
 export async function POST(request: NextRequest) {
   if (!process.env.GEMINI_API_KEY) {
     return NextResponse.json({ error: 'GEMINI_API_KEY is not configured' }, { status: 500 });
-  }
-
-  const rateLimit = await checkAiRateLimit(request);
-  if (!rateLimit.allowed) {
-    return NextResponse.json(
-      { error: 'Too many requests — please wait a bit before asking for more feedback.' },
-      { status: 429, headers: rateLimitResponseHeaders(rateLimit) }
-    );
   }
 
   let body: unknown;
@@ -67,7 +63,19 @@ export async function POST(request: NextRequest) {
 
   const { guesstimateId, userNotes } = validation.data;
 
-  const guesstimate = await getQuestionById(guesstimateId);
+  // Independent of each other, so pay for one round trip rather than two.
+  const [rateLimit, guesstimate] = await Promise.all([
+    checkAiRateLimit(request),
+    getQuestionById(guesstimateId),
+  ]);
+
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests — please wait a bit before asking for more feedback.' },
+      { status: 429, headers: rateLimitResponseHeaders(rateLimit) }
+    );
+  }
+
   if (!guesstimate) {
     return NextResponse.json({ error: 'Unknown guesstimate id' }, { status: 404 });
   }
@@ -92,6 +100,7 @@ export async function POST(request: NextRequest) {
           required: ['strengths', 'gaps'],
         },
         temperature: 0.5,
+        maxOutputTokens: 320,
       },
     });
 

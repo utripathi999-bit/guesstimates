@@ -44,7 +44,18 @@ WHAT MAKES THESE GOOD:
 - Every step's "items" must mix at least one FACTUAL anchor (isFactual: true — a real, defensible benchmark
   a well-read candidate could know) with clearly-labelled ESTIMATED assumptions (isFactual: false). The
   whole point of the product is teaching candidates which is which, so never mislabel a guess as a fact.
-- "sourceOrLogic" is one line: where a factual number comes from, or the reasoning behind an estimate.
+- "sourceOrLogic" is where students actually learn the craft, so it carries real weight — 2-3 sentences,
+  not a label. For a FACTUAL anchor: where the figure comes from and roughly how confident it is. For an
+  ESTIMATE, show the reasoning that produced it, in this shape:
+    (1) what you anchored on — an everyday observation, a comparable market, or personal experience a
+        candidate could plausibly reason from;
+    (2) why that lands on this number rather than a much higher or lower one;
+    (3) what would move it — which segment, season, or city tier would push it up or down.
+  "Assumed based on typical usage" is a non-answer. "Most office-goers buy chai twice a day — once mid-
+  morning, once post-lunch — so 2 is the floor for a working adult; students and retirees pull the
+  city-wide average down, which is why 2 rather than 3" is the standard.
+- Where a reasonable person could have picked a different number, say so — a student whose estimate
+  differs shouldn't conclude they were wrong.
 - Steps chain: each step's calculation consumes the previous step's result. The finalAnswer must actually
   follow arithmetically from the last step — a candidate will check.
 - "clarifyingQuestions" are the scoping questions a strong candidate would open with, and you will later have

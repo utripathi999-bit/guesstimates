@@ -41,14 +41,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'GEMINI_API_KEY is not configured' }, { status: 500 });
   }
 
-  const rateLimit = await checkAiRateLimit(request);
-  if (!rateLimit.allowed) {
-    return NextResponse.json(
-      { error: 'Too many requests — please wait a bit before asking for another hint.' },
-      { status: 429, headers: rateLimitResponseHeaders(rateLimit) }
-    );
-  }
-
   let body: unknown;
   try {
     body = await request.json();
@@ -63,7 +55,19 @@ export async function POST(request: NextRequest) {
 
   const { guesstimateId, userNotes } = validation.data;
 
-  const guesstimate = await getQuestionById(guesstimateId);
+  // Independent of each other, so pay for one round trip rather than two.
+  const [rateLimit, guesstimate] = await Promise.all([
+    checkAiRateLimit(request),
+    getQuestionById(guesstimateId),
+  ]);
+
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests — please wait a bit before asking for another hint.' },
+      { status: 429, headers: rateLimitResponseHeaders(rateLimit) }
+    );
+  }
+
   if (!guesstimate) {
     return NextResponse.json({ error: 'Unknown guesstimate id' }, { status: 404 });
   }
@@ -94,6 +98,7 @@ export async function POST(request: NextRequest) {
           required: ['hint'],
         },
         temperature: 0.7,
+        maxOutputTokens: 260,
       },
     });
 

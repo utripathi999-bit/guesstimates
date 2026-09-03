@@ -8,6 +8,8 @@ import { getScratchpadNote, saveScratchpadNote } from '@/lib/streakStorage';
 
 interface ScratchpadProps {
   questionId: string;
+  /** Scoping the candidate has already settled, so hints/feedback stay consistent with it. */
+  clarifications?: { question: string; answer: string }[];
 }
 
 interface Feedback {
@@ -15,7 +17,7 @@ interface Feedback {
   gaps: string[];
 }
 
-export function Scratchpad({ questionId }: ScratchpadProps) {
+export function Scratchpad({ questionId, clarifications }: ScratchpadProps) {
   const [notes, setNotes] = useState('');
   const [hint, setHint] = useState<string | null>(null);
   const [hintLoading, setHintLoading] = useState(false);
@@ -48,7 +50,7 @@ export function Scratchpad({ questionId }: ScratchpadProps) {
       const res = await fetch('/api/hint', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ guesstimateId: questionId, userNotes: notes }),
+        body: JSON.stringify({ guesstimateId: questionId, userNotes: notes, clarifications }),
       });
       if (!res.ok) {
         setHintError(await extractApiErrorMessage(res, "Couldn't fetch a hint right now — keep structuring your own approach for now."));
@@ -70,7 +72,7 @@ export function Scratchpad({ questionId }: ScratchpadProps) {
       const res = await fetch('/api/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ guesstimateId: questionId, userNotes: notes }),
+        body: JSON.stringify({ guesstimateId: questionId, userNotes: notes, clarifications }),
       });
       if (!res.ok) {
         setFeedbackError(await extractApiErrorMessage(res, "Couldn't get feedback right now — try again in a moment."));

@@ -5,9 +5,19 @@ import { useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { extractApiErrorMessage } from '@/lib/apiError';
 
+export interface ClarificationPair {
+  question: string;
+  answer: string;
+}
+
 interface ClarifyingQuestionsProps {
   guesstimateId: string;
   suggestedQuestions: string[];
+  /**
+   * Reports settled scoping upward so the hint and feedback tools know what
+   * the interviewer has already told this candidate.
+   */
+  onClarificationsChange?: (pairs: ClarificationPair[]) => void;
 }
 
 interface ThreadEntry {
@@ -26,7 +36,11 @@ function generateThreadEntryId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function ClarifyingQuestions({ guesstimateId, suggestedQuestions }: ClarifyingQuestionsProps) {
+export function ClarifyingQuestions({
+  guesstimateId,
+  suggestedQuestions,
+  onClarificationsChange,
+}: ClarifyingQuestionsProps) {
   const [open, setOpen] = useState(true);
   const [thread, setThread] = useState<ThreadEntry[]>([]);
   const [draft, setDraft] = useState('');
@@ -57,9 +71,17 @@ export function ClarifyingQuestions({ guesstimateId, suggestedQuestions }: Clari
         return;
       }
       const data: { answer?: string } = await res.json();
-      setThread((prev) =>
-        prev.map((t) => (t.id === id ? { ...t, answer: data.answer ?? "I don't have an answer for that.", status: 'done' } : t))
-      );
+      const answer = data.answer ?? "I don't have an answer for that.";
+      setThread((prev) => prev.map((t) => (t.id === id ? { ...t, answer, status: 'done' as const } : t)));
+
+      // Computed outside the updater — a state updater must stay pure, and
+      // everything needed is already in scope.
+      onClarificationsChange?.([
+        ...thread
+          .filter((entry) => entry.status === 'done' && entry.answer)
+          .map((entry) => ({ question: entry.question, answer: entry.answer as string })),
+        { question: trimmed, answer },
+      ]);
     } catch {
       setThread((prev) => prev.map((t) => (t.id === id ? { ...t, status: 'error' } : t)));
     } finally {

@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { CheckCircle2, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { ClarifyingQuestions } from '@/components/ClarifyingQuestions';
+import { ClarifyingQuestions, type ClarificationPair } from '@/components/ClarifyingQuestions';
 import { useProgress } from '@/components/ProgressProvider';
 import { QuestionRail } from '@/components/QuestionRail';
 import { Scratchpad } from '@/components/Scratchpad';
@@ -24,6 +24,7 @@ export function GuesstimateView({ guesstimate }: GuesstimateViewProps) {
   // Bookmarks stay per-device — they're a personal reading aid, not scored progress.
   const localPrefs = useStreakData();
 
+  const [clarifications, setClarifications] = useState<ClarificationPair[]>([]);
   const [revealed, setRevealed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [celebration, setCelebration] = useState<{
@@ -75,10 +76,14 @@ export function GuesstimateView({ guesstimate }: GuesstimateViewProps) {
             </div>
           )}
 
-          <ClarifyingQuestions guesstimateId={guesstimate.id} suggestedQuestions={guesstimate.clarifyingQuestions} />
+          <ClarifyingQuestions
+            guesstimateId={guesstimate.id}
+            suggestedQuestions={guesstimate.clarifyingQuestions}
+            onClarificationsChange={setClarifications}
+          />
 
           <div className="mb-6">
-            <Scratchpad questionId={guesstimate.id} />
+            <Scratchpad questionId={guesstimate.id} clarifications={clarifications} />
           </div>
 
           {!revealed && (

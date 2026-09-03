@@ -11,6 +11,15 @@ export const dynamic = 'force-dynamic';
 const HintRequestZ = z.object({
   guesstimateId: z.string().min(1).max(120),
   userNotes: z.string().max(4000),
+  /**
+   * What the candidate has already settled with the interviewer during
+   * scoping. Without it the hint can nudge toward something they've already
+   * pinned down, which reads as if the interviewer wasn't listening.
+   */
+  clarifications: z
+    .array(z.object({ question: z.string().max(300), answer: z.string().max(600) }))
+    .max(6)
+    .optional(),
 });
 
 function buildSystemInstruction(guesstimate: Guesstimate): string {
@@ -30,6 +39,11 @@ State it directly when that's more useful than asking — "you haven't split out
 every time. If they've already covered the chain, say so and point at a real refinement or sanity check
 rather than inventing a gap. If their notes are empty or a stray sentence, tell them to put down a
 population or base unit first and what kind of split it will need.
+
+IF A SCOPING EXCHANGE IS SHOWN BELOW, it is what you already told this candidate earlier in the interview.
+Treat it as settled and stay consistent with it — never nudge them toward something you've already ruled in
+or out, and never contradict an answer you gave. If a scoping answer implies work they haven't done yet
+(you told them to include a segment and their notes don't have it), that is the strongest thing to nudge on.
 
 ${sharedRules()}
 
@@ -53,7 +67,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid request', issues: validation.error.issues }, { status: 400 });
   }
 
-  const { guesstimateId, userNotes } = validation.data;
+  const { guesstimateId, userNotes, clarifications } = validation.data;
 
   // Independent of each other, so pay for one round trip rather than two.
   const [rateLimit, guesstimate] = await Promise.all([
@@ -74,21 +88,23 @@ export async function POST(request: NextRequest) {
 
   const systemInstruction = buildSystemInstruction(guesstimate);
 
+  const scopingExchange = (clarifications ?? [])
+    .map((turn) => `Candidate asked: ${turn.question}\nYou answered: ${turn.answer}`)
+    .join('\n\n');
+
+  const userMessage = [
+    scopingExchange ? `Scoping already settled with this candidate:\n"""\n${scopingExchange}\n"""` : '',
+    `Candidate's scratchpad notes so far:\n"""\n${userNotes || '(empty — candidate has not written anything yet)'}\n"""`,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
     const response = await ai.models.generateContent({
       model: 'gemini-3.5-flash-lite',
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            {
-              text: `Candidate's scratchpad notes so far:\n"""\n${userNotes || '(empty — candidate has not written anything yet)'}\n"""`,
-            },
-          ],
-        },
-      ],
+      contents: [{ role: 'user', parts: [{ text: userMessage }] }],
       config: {
         systemInstruction,
         responseMimeType: 'application/json',

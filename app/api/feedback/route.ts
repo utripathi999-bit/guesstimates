@@ -11,6 +11,11 @@ export const dynamic = 'force-dynamic';
 const FeedbackRequestZ = z.object({
   guesstimateId: z.string().min(1).max(120),
   userNotes: z.string().min(1).max(4000),
+  /** Scoping already settled with the interviewer — see the hint route for why. */
+  clarifications: z
+    .array(z.object({ question: z.string().max(300), answer: z.string().max(600) }))
+    .max(6)
+    .optional(),
 });
 
 function buildSystemInstruction(guesstimate: Guesstimate): string {
@@ -32,6 +37,9 @@ Assess their APPROACH first — that is what a guesstimate is actually testing:
 Their specific numbers are the LAST thing you look at, and only per the flexibility rules below — a
 plausible-but-different assumption is not a gap, and listing it as one teaches them to guess what the
 interviewer wanted instead of reasoning for themselves.
+
+If a scoping exchange is shown, it's what you already told this candidate — don't fault them for a choice
+you handed them, and do flag it if a scoping answer implies work their notes are missing.
 
 Be specific to their actual words — paraphrase their own stated structure back. Generic feedback that
 would fit any case is worthless here. If their notes are too sparse to assess, say exactly that as the
@@ -61,7 +69,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid request', issues: validation.error.issues }, { status: 400 });
   }
 
-  const { guesstimateId, userNotes } = validation.data;
+  const { guesstimateId, userNotes, clarifications } = validation.data;
 
   // Independent of each other, so pay for one round trip rather than two.
   const [rateLimit, guesstimate] = await Promise.all([
@@ -82,12 +90,23 @@ export async function POST(request: NextRequest) {
 
   const systemInstruction = buildSystemInstruction(guesstimate);
 
+  const scopingExchange = (clarifications ?? [])
+    .map((turn) => `Candidate asked: ${turn.question}\nYou answered: ${turn.answer}`)
+    .join('\n\n');
+
+  const userMessage = [
+    scopingExchange ? `Scoping already settled with this candidate:\n"""\n${scopingExchange}\n"""` : '',
+    `Candidate's written notes:\n"""\n${userNotes}\n"""`,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
     const response = await ai.models.generateContent({
       model: 'gemini-3.5-flash-lite',
-      contents: [{ role: 'user', parts: [{ text: `Candidate's written notes:\n"""\n${userNotes}\n"""` }] }],
+      contents: [{ role: 'user', parts: [{ text: userMessage }] }],
       config: {
         systemInstruction,
         responseMimeType: 'application/json',

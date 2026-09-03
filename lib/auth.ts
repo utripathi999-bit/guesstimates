@@ -136,6 +136,21 @@ export async function listAllAccounts(): Promise<AccountSummary[]> {
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
 
+/**
+ * Fully removes an account: credentials, progress, and every leaderboard
+ * trace. Any live session for it stops resolving (getSessionAccount returns
+ * null once the account record is gone), so the user is effectively signed out.
+ */
+export async function deleteAccount(normalizedEmail: string): Promise<void> {
+  const redis = getRedis();
+  const pipeline = redis.pipeline();
+  pipeline.del(KEYS.account(normalizedEmail));
+  pipeline.del(KEYS.userProgress(normalizedEmail));
+  pipeline.del(KEYS.userStreak(normalizedEmail));
+  pipeline.zrem(KEYS.leaderboardStreaks, normalizedEmail);
+  await pipeline.exec();
+}
+
 /** The single account allowed to see the admin view, configured via env. */
 export function isOwner(account: Account | null): boolean {
   const ownerEmail = process.env.OWNER_EMAIL;

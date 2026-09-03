@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getSessionAccountFromCookies, isOwner, normalizeEmail } from '@/lib/auth';
+import { deleteAccount, getSessionAccountFromCookies, isOwner, normalizeEmail } from '@/lib/auth';
 import { getRedis, KEYS } from '@/lib/redis';
 
 export const dynamic = 'force-dynamic';
@@ -8,6 +8,10 @@ export const dynamic = 'force-dynamic';
 const RenameZ = z.object({
   email: z.string().trim().email(),
   displayName: z.string().trim().min(1).max(40),
+});
+
+const DeleteAccountZ = z.object({
+  email: z.string().trim().email(),
 });
 
 /**
@@ -46,4 +50,42 @@ export async function PATCH(request: NextRequest) {
   await redis.hset(KEYS.account(email), { displayName: validation.data.displayName });
 
   return NextResponse.json({ success: true, displayName: validation.data.displayName });
+}
+
+/**
+ * Owner-only: permanently remove an account and everything attached to it —
+ * for clearing out test accounts, or a student who asks to be removed.
+ * Refuses to delete the owner's own account, since that would lock you out
+ * of this page with no way back in.
+ */
+export async function DELETE(request: NextRequest) {
+  const account = await getSessionAccountFromCookies();
+  if (!isOwner(account)) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  const validation = DeleteAccountZ.safeParse(body);
+  if (!validation.success) {
+    return NextResponse.json({ error: 'Invalid request', issues: validation.error.issues }, { status: 400 });
+  }
+
+  const email = normalizeEmail(validation.data.email);
+  if (account && email === account.email) {
+    return NextResponse.json({ error: "You can't delete your own owner account" }, { status: 400 });
+  }
+
+  try {
+    await deleteAccount(email);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('account delete failed:', error);
+    return NextResponse.json({ error: 'Could not delete that account' }, { status: 500 });
+  }
 }

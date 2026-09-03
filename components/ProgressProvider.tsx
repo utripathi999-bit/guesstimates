@@ -7,7 +7,8 @@ import type { QuestionStatus } from '@/lib/types';
 
 export interface SolveOutcome {
   pointsEarned: number;
-  dailyGoalJustCompleted: boolean;
+  streakAdvanced: boolean;
+  bothDoneToday: boolean;
   freezeUsed: boolean;
   streak: number;
 }
@@ -98,14 +99,16 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
         const data: {
           progress: UserProgress;
           pointsEarned: number;
-          dailyGoalJustCompleted: boolean;
+          streakAdvanced: boolean;
+          bothDoneToday: boolean;
           freezeUsed: boolean;
         } = await res.json();
 
         setProgress(data.progress);
         return {
           pointsEarned: data.pointsEarned,
-          dailyGoalJustCompleted: data.dailyGoalJustCompleted,
+          streakAdvanced: data.streakAdvanced,
+          bothDoneToday: data.bothDoneToday,
           freezeUsed: data.freezeUsed,
           streak: data.progress.currentStreak,
         };

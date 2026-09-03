@@ -65,7 +65,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       progress: result.progress,
       pointsEarned: result.pointsEarned,
-      dailyGoalJustCompleted: result.dailyGoalJustCompleted,
+      streakAdvanced: result.streakAdvanced,
+      bothDoneToday: result.bothDoneToday,
       freezeUsed: result.freezeUsed,
       counted: result.counted,
     });

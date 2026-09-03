@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Loader2, Mail, Pencil, X } from 'lucide-react';
+import { Check, Loader2, Mail, Pencil, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import { extractApiErrorMessage } from '@/lib/apiError';
 
@@ -21,6 +21,8 @@ export function AdminUsersList({ initialUsers }: { initialUsers: AdminUser[] }) 
   const [editingEmail, setEditingEmail] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [deletingEmail, setDeletingEmail] = useState<string | null>(null);
+  const [confirmingEmail, setConfirmingEmail] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   function startEdit(user: AdminUser) {
@@ -51,6 +53,28 @@ export function AdminUsersList({ initialUsers }: { initialUsers: AdminUser[] }) 
       setError('Could not save that name.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function remove(email: string) {
+    setDeletingEmail(email);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      if (!res.ok) {
+        setError(await extractApiErrorMessage(res, 'Could not delete that account.'));
+        return;
+      }
+      setUsers((prev) => prev.filter((u) => u.email !== email));
+      setConfirmingEmail(null);
+    } catch {
+      setError('Could not delete that account.');
+    } finally {
+      setDeletingEmail(null);
     }
   }
 
@@ -118,6 +142,31 @@ export function AdminUsersList({ initialUsers }: { initialUsers: AdminUser[] }) 
                   <span className="ml-auto whitespace-nowrap text-xs font-bold text-text-muted">
                     Joined {formatJoined(user.createdAt)}
                   </span>
+                  {confirmingEmail === user.email ? (
+                    <span className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => remove(user.email)}
+                        disabled={deletingEmail === user.email}
+                        className="rounded-full bg-danger px-2.5 py-1 text-xs font-black text-white disabled:opacity-50"
+                      >
+                        {deletingEmail === user.email ? 'Deleting...' : 'Confirm'}
+                      </button>
+                      <button
+                        onClick={() => setConfirmingEmail(null)}
+                        className="rounded-full px-2 py-1 text-xs font-bold text-text-muted hover:bg-black/5"
+                      >
+                        Cancel
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmingEmail(user.email)}
+                      aria-label={`Delete account for ${user.displayName}`}
+                      className="rounded-full p-1.5 text-text-muted hover:bg-black/5 hover:text-danger-dark"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" strokeWidth={2.5} />
+                    </button>
+                  )}
                 </>
               )}
             </li>

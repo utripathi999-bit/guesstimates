@@ -26,7 +26,12 @@ export function GuesstimateView({ guesstimate }: GuesstimateViewProps) {
 
   const [revealed, setRevealed] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [celebration, setCelebration] = useState<{ streak: number; freezeUsed: boolean } | null>(null);
+  const [celebration, setCelebration] = useState<{
+    streak: number;
+    freezeUsed: boolean;
+    bothDone: boolean;
+    pointsEarned: number;
+  } | null>(null);
 
   const bookmarked = localPrefs.bookmarkedIds.includes(guesstimate.id);
   const status = statusOf(guesstimate.id);
@@ -41,8 +46,15 @@ export function GuesstimateView({ guesstimate }: GuesstimateViewProps) {
     setSaving(true);
     const outcome = await solve(guesstimate.id);
     setSaving(false);
-    if (outcome?.dailyGoalJustCompleted) {
-      setCelebration({ streak: outcome.streak, freezeUsed: outcome.freezeUsed });
+    // Celebrate whenever the streak advances — solving one of the day's
+    // questions is enough to keep it alive, not just finishing both.
+    if (outcome?.streakAdvanced) {
+      setCelebration({
+        streak: outcome.streak,
+        freezeUsed: outcome.freezeUsed,
+        bothDone: outcome.bothDoneToday,
+        pointsEarned: outcome.pointsEarned,
+      });
     }
   }
 
@@ -111,6 +123,8 @@ export function GuesstimateView({ guesstimate }: GuesstimateViewProps) {
         onClose={() => setCelebration(null)}
         streak={celebration?.streak ?? 0}
         freezeUsed={celebration?.freezeUsed ?? false}
+        bothDone={celebration?.bothDone ?? false}
+        pointsEarned={celebration?.pointsEarned ?? 0}
       />
     </main>
   );

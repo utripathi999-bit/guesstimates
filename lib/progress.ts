@@ -30,10 +30,14 @@ export interface UserProgress {
   points: number;
   currentStreak: number;
   longestStreak: number;
+  /** Last day the streak was kept alive — i.e. at least one of that day's questions was solved. */
   lastCompletedDate: string | null;
   completedQuestionIds: string[];
   attemptedQuestionIds: string[];
+  /** Days the streak was kept alive (one or both questions). */
   dailyCompletionDates: string[];
+  /** Days BOTH questions were finished — tracked separately so the bonus pays once. */
+  bothCompletedDates: string[];
   freezesAvailable: number;
   totalCompleted: number;
 }
@@ -46,6 +50,7 @@ export const EMPTY_PROGRESS: UserProgress = {
   completedQuestionIds: [],
   attemptedQuestionIds: [],
   dailyCompletionDates: [],
+  bothCompletedDates: [],
   freezesAvailable: STARTING_FREEZES,
   totalCompleted: 0,
 };
@@ -101,7 +106,10 @@ export async function recordAttempt(normalizedEmail: string, questionId: string)
 export interface SolveResult {
   progress: UserProgress;
   pointsEarned: number;
-  dailyGoalJustCompleted: boolean;
+  /** The streak advanced — one of today's questions was solved, first time today. */
+  streakAdvanced: boolean;
+  /** Both of today's questions are now done (earns the extra bonus, once). */
+  bothDoneToday: boolean;
   freezeUsed: boolean;
   /** False when this question was already solved — nothing was awarded. */
   counted: boolean;
@@ -125,7 +133,14 @@ export async function recordSolve(
   let pointsEarned = 0;
 
   if (progress.completedQuestionIds.includes(questionId)) {
-    return { progress, pointsEarned: 0, dailyGoalJustCompleted: false, freezeUsed: false, counted: false };
+    return {
+      progress,
+      pointsEarned: 0,
+      streakAdvanced: false,
+      bothDoneToday: false,
+      freezeUsed: false,
+      counted: false,
+    };
   }
 
   progress.completedQuestionIds.push(questionId);
@@ -138,15 +153,18 @@ export async function recordSolve(
     pointsEarned += POINTS.ATTEMPT;
   }
 
-  let dailyGoalJustCompleted = false;
+  let streakAdvanced = false;
   let freezeUsed = false;
 
-  const bothTodaysDone =
-    todaysIds.length > 0 && todaysIds.every((id) => progress.completedQuestionIds.includes(id));
+  const solvedToday = todaysIds.filter((id) => progress.completedQuestionIds.includes(id)).length;
+  const solvedAnyToday = solvedToday > 0;
+  const bothDoneToday = todaysIds.length > 0 && solvedToday === todaysIds.length;
 
-  if (bothTodaysDone && progress.lastCompletedDate !== todayStr) {
-    dailyGoalJustCompleted = true;
-    pointsEarned += POINTS.BOTH_IN_A_DAY;
+  // One of the day's questions is enough to keep the streak alive. Doing both
+  // is worth more points, but a student who only has time for one shouldn't
+  // lose a streak they've been building.
+  if (solvedAnyToday && progress.lastCompletedDate !== todayStr) {
+    streakAdvanced = true;
     progress.dailyCompletionDates.push(todayStr);
 
     if (progress.lastCompletedDate === null) {
@@ -173,8 +191,15 @@ export async function recordSolve(
     progress.lastCompletedDate = todayStr;
   }
 
+  // Finishing both is a separate, additional reward — tracked on its own dates
+  // list so it pays exactly once per day regardless of solve order.
+  if (bothDoneToday && !progress.bothCompletedDates.includes(todayStr)) {
+    progress.bothCompletedDates.push(todayStr);
+    pointsEarned += POINTS.BOTH_IN_A_DAY;
+  }
+
   progress.points += pointsEarned;
   await saveProgress(normalizedEmail, progress);
 
-  return { progress, pointsEarned, dailyGoalJustCompleted, freezeUsed, counted: true };
+  return { progress, pointsEarned, streakAdvanced, bothDoneToday, freezeUsed, counted: true };
 }

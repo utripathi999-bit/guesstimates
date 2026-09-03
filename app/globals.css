@@ -80,6 +80,7 @@
   --color-callout-danger-edge: var(--callout-danger-edge);
   --color-callout-danger-text: var(--callout-danger-text);
   --font-sans: var(--font-nunito);
+  --font-formula: var(--font-formula), ui-sans-serif, system-ui, sans-serif;
   --animate-pop: pop 0.2s ease-out;
   --animate-flame-flicker: flame-flicker 1.6s ease-in-out infinite;
   --animate-slide-up: slide-up 0.35s cubic-bezier(0.16, 1, 0.3, 1);

@@ -1,7 +1,9 @@
 import { ShieldCheck, Users } from 'lucide-react';
 import { notFound } from 'next/navigation';
+import { AdminQuestions } from '@/components/AdminQuestions';
 import { AdminUsersList } from '@/components/AdminUsersList';
 import { getSessionAccountFromCookies, isOwner, listAllAccounts } from '@/lib/auth';
+import { getDailyPair } from '@/lib/questionStore';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +13,7 @@ export default async function AdminPage() {
   // Not "403" — a non-owner shouldn't even learn this page exists.
   if (!isOwner(account)) notFound();
 
-  const accounts = await listAllAccounts();
+  const [accounts, daily] = await Promise.all([listAllAccounts(), getDailyPair()]);
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-10">
@@ -19,7 +21,21 @@ export default async function AdminPage() {
         <ShieldCheck className="h-3.5 w-3.5" strokeWidth={3} />
         Owner only
       </p>
-      <h1 className="text-display text-3xl font-black text-foreground">Registered students</h1>
+      <h1 className="text-display mb-8 text-3xl font-black text-foreground">Admin</h1>
+
+      <AdminQuestions
+        initialQuestions={daily.questions.map((q) => ({
+          id: q.id,
+          title: q.title,
+          region: q.region,
+          category: q.category,
+          difficulty: q.difficulty,
+        }))}
+        initialSource={daily.source}
+        date={daily.date}
+      />
+
+      <h2 className="text-display text-2xl font-black text-foreground">Registered students</h2>
       <p className="mb-6 mt-1 text-text-muted">
         {accounts.length} {accounts.length === 1 ? 'account' : 'accounts'}. Emails are visible only to you — never
         shown to students anywhere in the app. Click the pencil to correct a name.

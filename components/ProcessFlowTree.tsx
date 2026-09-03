@@ -46,7 +46,7 @@ export function ProcessFlowTree({ steps, finalAnswer }: ProcessFlowTreeProps) {
                   {meta.label}
                 </span>
               </div>
-              <p className="rounded-lg bg-background px-3 py-2 font-mono text-sm text-text-muted">{step.calculation}</p>
+              <p className="rounded-lg bg-background px-3 py-2 font-formula tabular-nums text-sm text-text-muted">{step.calculation}</p>
               <p className="mt-2 text-lg font-black text-primary-dark">{step.result}</p>
             </motion.div>
             {index < steps.length - 1 && (

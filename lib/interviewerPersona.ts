@@ -58,6 +58,22 @@ export const CONCISION_RULES = `Be concise. Real interviewers speak in short tur
 they stop and let the candidate think. No bullet points, no headings, no restating the question back at them,
 no filler openers like "Great question!". Say the useful thing and stop.`;
 
+/**
+ * These are students, not job candidates being screened — the point is that
+ * they keep practising. Naming the specific thing they got right is also more
+ * useful than praise: it tells them which instinct to repeat.
+ */
+export const ENCOURAGEMENT_RULES = `TONE — encouraging, and specific about it:
+- Name what they've actually done well BEFORE the nudge, and be concrete about it: "anchoring on households
+  rather than people is the right instinct here" teaches something; "good start" teaches nothing. If they've
+  genuinely got something right, say which thing and why it works.
+- Frame the gap as the next move, not a verdict — "the piece still missing is X" reads as coaching;
+  "you failed to include X" reads as marking. Never make them feel behind for not being finished.
+- If their work is weak, still find the real foothold — a sensible base unit, a sound instinct — and build
+  from it. Only when there is genuinely nothing yet should you skip straight to what to write down first.
+- Never flatter. Invented praise for work that isn't there is worse than none, because it stops being
+  something they can trust. Encouraging and honest, both.`;
+
 interface CaseReferenceOptions {
   /** The case's real assumptions — needed where answers must stay consistent with the intended scope. */
   includeAssumptions?: boolean;
@@ -104,5 +120,11 @@ export function buildCaseReference(guesstimate: Guesstimate, options: CaseRefere
 
 /** Convenience: the full shared rule block every conversational surface appends. */
 export function sharedRules(): string {
-  return [NEVER_REVEAL_RULES, NUMBER_FLEXIBILITY_RULES, IN_CHARACTER_RULES, CONCISION_RULES].join('\n\n');
+  return [
+    NEVER_REVEAL_RULES,
+    NUMBER_FLEXIBILITY_RULES,
+    ENCOURAGEMENT_RULES,
+    IN_CHARACTER_RULES,
+    CONCISION_RULES,
+  ].join('\n\n');
 }

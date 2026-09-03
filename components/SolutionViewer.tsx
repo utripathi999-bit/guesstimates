@@ -33,7 +33,7 @@ export function SolutionViewer({ guesstimate }: SolutionViewerProps) {
           </span>
           Core Equation
         </div>
-        <p className="rounded-xl bg-background px-4 py-3 font-mono text-sm text-foreground">
+        <p className="rounded-xl bg-background px-4 py-3 font-formula tabular-nums text-sm text-foreground">
           {guesstimate.coreEquation}
         </p>
       </div>
@@ -67,7 +67,7 @@ export function SolutionViewer({ guesstimate }: SolutionViewerProps) {
                 {expanded && (
                   <div className="animate-slide-up border-t border-surface-border px-4 py-4">
                     {step.formula && (
-                      <p className="mb-3 rounded-lg bg-background px-3 py-2 font-mono text-xs text-text-muted">
+                      <p className="mb-3 rounded-lg bg-background px-3 py-2 font-formula tabular-nums text-xs text-text-muted">
                         {step.formula}
                       </p>
                     )}
@@ -88,7 +88,7 @@ export function SolutionViewer({ guesstimate }: SolutionViewerProps) {
                       ))}
                     </ul>
                     <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-callout-info px-3 py-2 text-callout-info-text">
-                      <span className="font-mono text-xs opacity-80">{step.calculation}</span>
+                      <span className="font-formula tabular-nums text-xs opacity-80">{step.calculation}</span>
                       <span className="font-black">{step.result}</span>
                     </div>
                   </div>

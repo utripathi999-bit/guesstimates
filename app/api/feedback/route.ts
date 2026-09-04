@@ -1,6 +1,6 @@
-import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { callInterviewerModel } from '@/lib/geminiCall';
 import { buildCaseReference, INTERVIEWER_IDENTITY, sharedRules } from '@/lib/interviewerPersona';
 import { getQuestionById } from '@/lib/questionStore';
 import { checkAiRateLimit, rateLimitResponseHeaders } from '@/lib/rateLimit';
@@ -102,43 +102,25 @@ export async function POST(request: NextRequest) {
     .join('\n\n');
 
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash-lite',
-      contents: [{ role: 'user', parts: [{ text: userMessage }] }],
-      config: {
-        systemInstruction,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: 'OBJECT',
-          properties: {
-            strengths: { type: 'ARRAY', items: { type: 'STRING' } },
-            gaps: { type: 'ARRAY', items: { type: 'STRING' } },
-          },
-          required: ['strengths', 'gaps'],
+    const { raw: rawText } = await callInterviewerModel({
+      systemInstruction,
+      userMessage,
+      responseSchema: {
+        type: 'OBJECT',
+        properties: {
+          strengths: { type: 'ARRAY', items: { type: 'STRING' } },
+          gaps: { type: 'ARRAY', items: { type: 'STRING' } },
         },
-        temperature: 0.5,
-        // See the clarify route: thinking tokens share the output budget, and
-        // the old 320-token ceiling was being spent before the reply started.
-        thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
-        maxOutputTokens: 2048,
+        required: ['strengths', 'gaps'],
       },
+      temperature: 0.5,
     });
-
-    const rawText = response.text;
-    if (!rawText) {
-      return NextResponse.json({ error: 'Empty response from model' }, { status: 502 });
-    }
 
     let parsed: { strengths?: string[]; gaps?: string[] };
     try {
       parsed = JSON.parse(rawText) as { strengths?: string[]; gaps?: string[] };
     } catch {
-      console.error('feedback: unparseable model output', {
-        finishReason: response.candidates?.[0]?.finishReason,
-        rawText: rawText.slice(0, 300),
-      });
+      console.error('feedback: unparseable model output', rawText.slice(0, 300));
       return NextResponse.json(
         { error: 'That feedback came back incomplete — ask again and it should come through.' },
         { status: 502 }

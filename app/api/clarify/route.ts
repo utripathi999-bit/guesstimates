@@ -1,6 +1,6 @@
-import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { callInterviewerModel } from '@/lib/geminiCall';
 import { buildCaseReference, INTERVIEWER_IDENTITY, sharedRules } from '@/lib/interviewerPersona';
 import { getQuestionById } from '@/lib/questionStore';
 import { checkAiRateLimit, rateLimitResponseHeaders } from '@/lib/rateLimit';
@@ -92,37 +92,16 @@ export async function POST(request: NextRequest) {
   ].join('\n');
 
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash-lite',
-      contents: [{ role: 'user', parts: [{ text: conversationText }] }],
-      config: {
-        systemInstruction,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: 'OBJECT',
-          properties: { answer: { type: 'STRING' } },
-          required: ['answer'],
-        },
-        temperature: 0.6,
-        /**
-         * Gemini 3.x thinks before answering, and those tokens come out of the
-         * same budget as the reply. The old 220-token ceiling was being spent
-         * on thinking, leaving JSON that stopped mid-string — which threw on
-         * parse and reached students as a blank "failed to get a response".
-         * Keep thinking minimal (flash-lite's own default) and leave real room
-         * for the answer; the prompt, not this ceiling, keeps replies short.
-         */
-        thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
-        maxOutputTokens: 2048,
+    const { raw: rawText } = await callInterviewerModel({
+      systemInstruction,
+      userMessage: conversationText,
+      responseSchema: {
+        type: 'OBJECT',
+        properties: { answer: { type: 'STRING' } },
+        required: ['answer'],
       },
+      temperature: 0.6,
     });
-
-    const rawText = response.text;
-    if (!rawText) {
-      return NextResponse.json({ error: 'Empty response from model' }, { status: 502 });
-    }
 
     // A truncated reply and a dead API are different failures and must not look
     // the same — this one is worth retrying, so say so.
@@ -130,10 +109,7 @@ export async function POST(request: NextRequest) {
     try {
       parsed = JSON.parse(rawText) as { answer?: string };
     } catch {
-      console.error('clarify: unparseable model output', {
-        finishReason: response.candidates?.[0]?.finishReason,
-        rawText: rawText.slice(0, 300),
-      });
+      console.error('clarify: unparseable model output', rawText.slice(0, 300));
       return NextResponse.json(
         { error: 'That reply came back incomplete — ask again and it should come through.' },
         { status: 502 }

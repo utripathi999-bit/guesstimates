@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { buildCaseReference, INTERVIEWER_IDENTITY, sharedRules } from '@/lib/interviewerPersona';
@@ -119,7 +119,10 @@ export async function POST(request: NextRequest) {
           required: ['strengths', 'gaps'],
         },
         temperature: 0.5,
-        maxOutputTokens: 320,
+        // See the clarify route: thinking tokens share the output budget, and
+        // the old 320-token ceiling was being spent before the reply started.
+        thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+        maxOutputTokens: 2048,
       },
     });
 
@@ -128,10 +131,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Empty response from model' }, { status: 502 });
     }
 
-    const parsed = JSON.parse(rawText) as { strengths?: string[]; gaps?: string[] };
+    let parsed: { strengths?: string[]; gaps?: string[] };
+    try {
+      parsed = JSON.parse(rawText) as { strengths?: string[]; gaps?: string[] };
+    } catch {
+      console.error('feedback: unparseable model output', {
+        finishReason: response.candidates?.[0]?.finishReason,
+        rawText: rawText.slice(0, 300),
+      });
+      return NextResponse.json(
+        { error: 'That feedback came back incomplete — ask again and it should come through.' },
+        { status: 502 }
+      );
+    }
+
     return NextResponse.json({ strengths: parsed.strengths ?? [], gaps: parsed.gaps ?? [] });
   } catch (error) {
-    console.error('feedback route failed:', error);
-    return NextResponse.json({ error: 'Failed to get feedback' }, { status: 500 });
+    const detail = error instanceof Error ? error.message : String(error);
+    console.error('feedback route failed:', detail);
+    return NextResponse.json({ error: 'Failed to get feedback', detail }, { status: 500 });
   }
 }

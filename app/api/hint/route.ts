@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { buildCaseReference, INTERVIEWER_IDENTITY, sharedRules } from '@/lib/interviewerPersona';
@@ -114,7 +114,10 @@ export async function POST(request: NextRequest) {
           required: ['hint'],
         },
         temperature: 0.7,
-        maxOutputTokens: 260,
+        // See the clarify route: thinking tokens share the output budget, and
+        // the old 260-token ceiling was being spent before the reply started.
+        thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+        maxOutputTokens: 2048,
       },
     });
 
@@ -123,14 +126,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Empty response from model' }, { status: 502 });
     }
 
-    const parsed = JSON.parse(rawText) as { hint?: string };
+    let parsed: { hint?: string };
+    try {
+      parsed = JSON.parse(rawText) as { hint?: string };
+    } catch {
+      console.error('hint: unparseable model output', {
+        finishReason: response.candidates?.[0]?.finishReason,
+        rawText: rawText.slice(0, 300),
+      });
+      return NextResponse.json(
+        { error: 'That hint came back incomplete — ask again and it should come through.' },
+        { status: 502 }
+      );
+    }
+
     if (!parsed.hint) {
       return NextResponse.json({ error: 'Malformed hint response' }, { status: 502 });
     }
 
     return NextResponse.json({ hint: parsed.hint });
   } catch (error) {
-    console.error('hint route failed:', error);
-    return NextResponse.json({ error: 'Failed to generate hint' }, { status: 500 });
+    const detail = error instanceof Error ? error.message : String(error);
+    console.error('hint route failed:', detail);
+    return NextResponse.json({ error: 'Failed to generate hint', detail }, { status: 500 });
   }
 }

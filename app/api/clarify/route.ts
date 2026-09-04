@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { buildCaseReference, INTERVIEWER_IDENTITY, sharedRules } from '@/lib/interviewerPersona';
@@ -106,7 +106,16 @@ export async function POST(request: NextRequest) {
           required: ['answer'],
         },
         temperature: 0.6,
-        maxOutputTokens: 220,
+        /**
+         * Gemini 3.x thinks before answering, and those tokens come out of the
+         * same budget as the reply. The old 220-token ceiling was being spent
+         * on thinking, leaving JSON that stopped mid-string — which threw on
+         * parse and reached students as a blank "failed to get a response".
+         * Keep thinking minimal (flash-lite's own default) and leave real room
+         * for the answer; the prompt, not this ceiling, keeps replies short.
+         */
+        thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+        maxOutputTokens: 2048,
       },
     });
 
@@ -115,14 +124,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Empty response from model' }, { status: 502 });
     }
 
-    const parsed = JSON.parse(rawText) as { answer?: string };
+    // A truncated reply and a dead API are different failures and must not look
+    // the same — this one is worth retrying, so say so.
+    let parsed: { answer?: string };
+    try {
+      parsed = JSON.parse(rawText) as { answer?: string };
+    } catch {
+      console.error('clarify: unparseable model output', {
+        finishReason: response.candidates?.[0]?.finishReason,
+        rawText: rawText.slice(0, 300),
+      });
+      return NextResponse.json(
+        { error: 'That reply came back incomplete — ask again and it should come through.' },
+        { status: 502 }
+      );
+    }
+
     if (!parsed.answer) {
       return NextResponse.json({ error: 'Malformed response' }, { status: 502 });
     }
 
     return NextResponse.json({ answer: parsed.answer });
   } catch (error) {
-    console.error('clarify route failed:', error);
-    return NextResponse.json({ error: 'Failed to get a response' }, { status: 500 });
+    // Detail is returned, not just logged: this failure was opaque from the
+    // outside for as long as it lasted, which is what made it hard to diagnose.
+    const detail = error instanceof Error ? error.message : String(error);
+    console.error('clarify route failed:', detail);
+    return NextResponse.json({ error: 'Failed to get a response', detail }, { status: 500 });
   }
 }

@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { callInterviewerModel } from '@/lib/geminiCall';
+import { AllModelsBusyError, callInterviewerModel } from '@/lib/geminiCall';
 import { buildCaseReference, INTERVIEWER_IDENTITY, sharedRules } from '@/lib/interviewerPersona';
 import { getQuestionById } from '@/lib/questionStore';
 import { checkAiRateLimit, rateLimitResponseHeaders } from '@/lib/rateLimit';
 import type { Guesstimate } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
+// Room to walk the fallback chain when the first models are at capacity.
+export const maxDuration = 30;
 
 const ClarifyRequestZ = z.object({
   guesstimateId: z.string().min(1).max(120),
@@ -122,6 +124,16 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ answer: parsed.answer });
   } catch (error) {
+    // Upstream congestion is temporary and not the student's fault — say that,
+    // rather than showing a failure they'll read as "the app is broken".
+    if (error instanceof AllModelsBusyError) {
+      console.warn('clarify: all models busy —', error.lastDetail);
+      return NextResponse.json(
+        { error: 'The interviewer is handling a lot of questions right now. Try again in a moment.' },
+        { status: 503, headers: { 'Retry-After': '30' } }
+      );
+    }
+
     // Detail is returned, not just logged: this failure was opaque from the
     // outside for as long as it lasted, which is what made it hard to diagnose.
     const detail = error instanceof Error ? error.message : String(error);

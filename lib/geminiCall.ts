@@ -6,15 +6,30 @@ import { GoogleGenAI, ThinkingLevel } from '@google/genai';
  *
  * It exists because of a real outage: `gemini-3.5-flash-lite` started returning
  * 503 UNAVAILABLE — "this model is currently experiencing high demand" — and
- * took clarifying questions, hints and feedback down together for everyone,
- * while question generation carried on fine because it runs on the larger
- * `gemini-3.5-flash`. A capacity problem on one model should degrade a feature,
- * not delete it, so a model being full now falls through to the next one.
+ * took clarifying questions, hints and feedback down together for everyone.
+ * A two-model chain wasn't enough: within the hour `gemini-3.5-flash` was
+ * saturated too, so the fallback ran out and the feature died again.
  *
- * Ordered cheapest-first: flash-lite handles these one-paragraph replies well
- * and costs less, so it stays the default and flash is the safety net.
+ * Hence a chain that spans model *generations* rather than just sizes. 3.5 and
+ * 3.1 are served from different capacity pools, so congestion in one is not
+ * congestion in the others — which is the whole point of a fallback. Ordered
+ * cheapest-first: the lite models handle a two-sentence reply perfectly well,
+ * and the larger ones are the safety net, not the default.
  */
-const MODEL_CHAIN = ['gemini-3.5-flash-lite', 'gemini-3.5-flash'] as const;
+const MODEL_CHAIN = [
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
+  'gemini-3.5-flash',
+  'gemini-3.6-flash',
+] as const;
+
+/** Raised when every model in the chain is out of capacity — a temporary, upstream condition. */
+export class AllModelsBusyError extends Error {
+  constructor(public readonly lastDetail: string) {
+    super('Every model in the chain is at capacity');
+    this.name = 'AllModelsBusyError';
+  }
+}
 
 /**
  * Whether an error means "this model has no room right now" — the only class of
@@ -88,7 +103,8 @@ export async function callInterviewerModel({
     }
   }
 
-  throw lastError instanceof Error
-    ? lastError
-    : new Error('Every model in the chain was unavailable');
+  // Every model was busy. This is upstream and temporary, and the caller needs
+  // to be able to say so rather than reporting a generic failure the student
+  // will read as "the app is broken".
+  throw new AllModelsBusyError(lastError instanceof Error ? lastError.message : String(lastError));
 }

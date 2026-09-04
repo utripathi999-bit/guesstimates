@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { callInterviewerModel } from '@/lib/geminiCall';
+import { AllModelsBusyError, callInterviewerModel } from '@/lib/geminiCall';
 import { buildCaseReference, INTERVIEWER_IDENTITY, sharedRules } from '@/lib/interviewerPersona';
 import { getQuestionById } from '@/lib/questionStore';
 import { checkAiRateLimit, rateLimitResponseHeaders } from '@/lib/rateLimit';
 import type { Guesstimate } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
+// Room to walk the fallback chain when the first models are at capacity.
+export const maxDuration = 30;
 
 const HintRequestZ = z.object({
   guesstimateId: z.string().min(1).max(120),
@@ -128,6 +130,16 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ hint: parsed.hint });
   } catch (error) {
+    // Upstream congestion is temporary and not the student's fault — say that,
+    // rather than showing a failure they'll read as "the app is broken".
+    if (error instanceof AllModelsBusyError) {
+      console.warn('hint: all models busy —', error.lastDetail);
+      return NextResponse.json(
+        { error: 'The interviewer is working through a lot of hints right now. Try again in a moment.' },
+        { status: 503, headers: { 'Retry-After': '30' } }
+      );
+    }
+
     const detail = error instanceof Error ? error.message : String(error);
     console.error('hint route failed:', detail);
     return NextResponse.json({ error: 'Failed to generate hint', detail }, { status: 500 });

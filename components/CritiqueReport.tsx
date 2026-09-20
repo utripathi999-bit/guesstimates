@@ -18,6 +18,7 @@ export interface CritiqueView {
   method?: string;
   concerns?: string[];
   reasoning?: string;
+  stage?: 'question' | 'solution';
   attempt: number;
   skipReason?: string;
   checkedAt: string;
@@ -38,8 +39,10 @@ function formatRatio(ratio: number): string {
  * numbers are. Showing "Rejected · 1.2x apart" alone reads like a contradiction.
  */
 function verdictLabel(c: CritiqueView): string {
-  if (c.verdict === 'skipped') return 'Not reviewed';
-  if (c.verdict === 'accept') return 'Agreed';
+  const premise = c.stage === 'question';
+  if (c.verdict === 'skipped') return premise ? 'Premise not reviewed' : 'Answer not reviewed';
+  if (c.verdict === 'accept') return premise ? 'Question stands up' : 'Answer agreed';
+  if (premise) return 'Rejected — the question itself';
   return c.ratio !== null && c.ratio > ACCEPTABLE_RATIO
     ? `Rejected — ${formatRatio(c.ratio)}× apart`
     : 'Rejected — flaw in the working';
@@ -73,12 +76,14 @@ function Round({ critique, index }: { critique: CritiqueView; index: number }) {
         <p className="mt-1 text-sm text-text-muted">{critique.skipReason}</p>
       ) : (
         <>
-          <p className="font-formula mt-1 text-xs text-text-muted">
-            writer <span className="font-black text-foreground">{formatIndian(critique.statedAnswer ?? NaN)}</span>
-            <span className="mx-1.5">vs</span>
-            reviewer <span className="font-black text-foreground">{formatIndian(critique.independentEstimate ?? NaN)}</span>
-            {critique.unit && <span className="ml-1">{critique.unit}</span>}
-          </p>
+          {critique.independentEstimate !== undefined && (
+            <p className="font-formula mt-1 text-xs text-text-muted">
+              writer <span className="font-black text-foreground">{formatIndian(critique.statedAnswer ?? NaN)}</span>
+              <span className="mx-1.5">vs</span>
+              reviewer <span className="font-black text-foreground">{formatIndian(critique.independentEstimate)}</span>
+              {critique.unit && <span className="ml-1">{critique.unit}</span>}
+            </p>
+          )}
 
           {critique.reasoning && <p className="mt-1.5 text-sm text-text-muted">{critique.reasoning}</p>}
 
@@ -98,6 +103,16 @@ function Round({ critique, index }: { critique: CritiqueView; index: number }) {
   );
 }
 
+/** A one-line account of how this question's review went. */
+function summarise(rounds: CritiqueView[]): string {
+  const redrawn = rounds.filter((r) => r.stage === 'question').length > 1;
+  const reworked = rounds.filter((r) => r.stage !== 'question').length > 1;
+  if (redrawn && reworked) return 'question redrawn, then solution reworked';
+  if (redrawn) return 'question redrawn';
+  if (reworked) return `solution reworked · settled in ${rounds.length} rounds`;
+  return 'passed both reviews first time';
+}
+
 /** One question and every round the writer and reviewer spent on it. */
 function QuestionLoop({ rounds }: { rounds: CritiqueView[] }) {
   const final = rounds[rounds.length - 1];
@@ -107,9 +122,7 @@ function QuestionLoop({ rounds }: { rounds: CritiqueView[] }) {
     <div className="shadow-card overflow-hidden rounded-2xl bg-surface">
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-surface-border px-4 py-3">
         <p className="min-w-0 text-sm font-black text-foreground">{final.title}</p>
-        <p className="text-xs font-bold text-text-muted">
-          {reworked ? `reworked · settled in ${rounds.length} rounds` : 'agreed first time'}
-        </p>
+        <p className="text-xs font-bold text-text-muted">{summarise(rounds)}</p>
       </div>
 
       <ol className="flex flex-col gap-4 p-4">

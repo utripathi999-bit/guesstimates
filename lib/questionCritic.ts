@@ -46,6 +46,13 @@ export type CritiqueBody = z.infer<typeof CritiqueZ>;
 export interface Critique extends Partial<CritiqueBody> {
   questionId: string;
   title: string;
+  /**
+   * Which review this is. 'question' asks whether the case is worth setting at
+   * all; 'solution' asks whether its answer is right. They fail for different
+   * reasons and are fixed differently — a broken premise needs a new question,
+   * a wrong number needs new working — so they are tracked apart.
+   */
+  stage: 'question' | 'solution';
   verdict: 'accept' | 'reject' | 'skipped';
   /** The question's own answer, for side-by-side reading in the admin view. */
   statedAnswer: number | null;
@@ -116,6 +123,116 @@ OUTPUT: reply with ONLY a JSON object, no prose around it and no markdown fence:
 {"independentEstimate": <number in the question's unit>, "method": "<your route, naming what you looked up>",
  "concerns": ["<specific problem>"], "fatalFlaw": <true|false>, "reasoning": "<2-3 sentences>"}`;
 
+const QuestionReviewZ = z.object({
+  premiseSound: z.boolean(),
+  answerable: z.boolean(),
+  concerns: z.array(z.string()).max(4),
+  reasoning: z.string(),
+});
+
+const QUESTION_REVIEW_INSTRUCTION = `You are a senior consulting interviewer deciding whether a guesstimate
+case is fit to put in front of Indian MBA candidates. You did not write it. You are judging the QUESTION
+only — not the answer, not the arithmetic, which someone else checks.
+
+USE GOOGLE SEARCH. The most important thing you check cannot be done from memory.
+
+1. IS THE PREMISE REAL? Does the thing being asked about actually exist, in that place, in that form, as a
+   recognisable category? This is the check that matters most, because a case resting on an invented premise
+   cannot be answered sensibly no matter how good the maths is.
+   A real example that got through: "Daily Revenue of a Busy South Indian Filter Coffee Kiosk in Chennai".
+   Filter coffee in Chennai is sold in darshinis, messes, tea stalls and restaurants — "filter coffee kiosk"
+   is not a retail format a Chennai student would recognise, so a candidate cannot picture what they are
+   sizing, and every assumption after that is guesswork about a thing that may not exist.
+   Search to confirm the format, brand, venue type or market segment genuinely exists as described. If you
+   cannot confirm it, or it is a plausible-sounding invention, premiseSound is FALSE.
+
+2. IS IT ANSWERABLE FROM ORDINARY LIFE? Every number a candidate needs must be reachable by a bright
+   business-aware student with no industry knowledge and no reference material. Anything requiring industry
+   metrics they have never had cause to know — power capacity, freight tonne-km, warehouse throughput,
+   spectrum, yields per hectare — makes answerable FALSE.
+
+3. IS IT A QUESTION AN INTERVIEWER WOULD ACTUALLY ASK? Market size of a consumer product, volume of an
+   everyday behaviour, revenue of a single outlet, how many of some visible thing a city needs. If it needs a
+   paragraph of setup before a candidate can start, it is wrong.
+
+4. IS THE TARGET UNAMBIGUOUS? The unit must settle money versus volume outright, and the scope (city,
+   national, daily, annual) must be clear from the question itself.
+
+Be specific and concrete. "Could be clearer" is not a concern; "a candidate cannot tell whether this means
+the whole chain or one outlet" is.
+
+OUTPUT: reply with ONLY a JSON object, no prose around it and no markdown fence:
+{"premiseSound": <true|false>, "answerable": <true|false>, "concerns": ["<specific problem>"],
+ "reasoning": "<2-3 sentences, naming what you searched for and found>"}`;
+
+/**
+ * Reviews whether the question is worth asking, before anyone checks its answer.
+ *
+ * This is a different failure mode from a wrong number and it had no check at
+ * all. Two cases shipped that were arithmetically fine and still bad: one about
+ * diesel generator load in tech parks, which no student could reason about, and
+ * one about a "filter coffee kiosk" in Chennai, a retail format that does not
+ * really exist under that name. Neither is something the solution reviewer
+ * would ever catch, because in both cases the working was sound.
+ *
+ * Never throws, for the same reason the solution reviewer doesn't: a review
+ * step that can take generation down is worse than no review step.
+ */
+export async function reviewQuestionPremise(question: Guesstimate, attempt = 1): Promise<Critique> {
+  const base = {
+    questionId: question.id,
+    title: question.title,
+    stage: 'question' as const,
+    statedAnswer: question.answer?.value ?? null,
+    unit: question.answer?.unit ?? null,
+    ratio: null,
+    checkedAt: new Date().toISOString(),
+    attempt,
+  };
+
+  const brief = `QUESTION: ${question.title}
+ASKS FOR: ${question.answer?.label ?? '(not specified)'}
+UNIT: ${question.answer?.unit ?? '(not specified)'}
+REGION: ${question.region}
+DIFFICULTY: ${question.difficulty}
+CATEGORY: ${question.category}
+SCOPING QUESTIONS IT EXPECTS: ${question.clarifyingQuestions.join(' | ')}
+KEY ASSUMPTIONS IT RELIES ON: ${question.keyAssumptions.join(' | ')}`;
+
+  try {
+    const { raw } = await callInterviewerModel({
+      systemInstruction: QUESTION_REVIEW_INSTRUCTION,
+      userMessage: brief,
+      responseSchema: {},
+      tools: [{ googleSearch: {} }],
+      temperature: 0.2,
+      maxOutputTokens: 4096,
+    });
+
+    const parsed = QuestionReviewZ.safeParse(parseLooseJson<unknown>(raw));
+    if (!parsed.success) {
+      console.warn('question review: unreadable verdict for', question.id, '—', raw.slice(0, 200));
+      return { ...base, verdict: 'skipped', skipReason: 'Question reviewer returned an unreadable verdict.' };
+    }
+
+    const { premiseSound, answerable, concerns, reasoning } = parsed.data;
+    return {
+      ...base,
+      verdict: premiseSound && answerable ? 'accept' : 'reject',
+      concerns,
+      reasoning,
+      method: premiseSound ? 'premise checked' : 'premise could not be confirmed',
+    };
+  } catch (error) {
+    const skipReason =
+      error instanceof AllModelsBusyError
+        ? 'Every model was at capacity — question premise passed unreviewed.'
+        : `Question reviewer failed: ${error instanceof Error ? error.message : String(error)}`;
+    console.warn('question review skipped for', question.id, '—', skipReason);
+    return { ...base, verdict: 'skipped', skipReason };
+  }
+}
+
 function ratioBetween(a: number, b: number): number {
   if (a <= 0 || b <= 0) return Infinity;
   return a > b ? a / b : b / a;
@@ -158,6 +275,7 @@ export async function critiqueQuestion(question: Guesstimate, attempt = 1): Prom
   const base = {
     questionId: question.id,
     title: question.title,
+    stage: 'solution' as const,
     statedAnswer: question.answer?.value ?? null,
     unit: question.answer?.unit ?? null,
     checkedAt: new Date().toISOString(),

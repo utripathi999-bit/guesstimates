@@ -2,7 +2,7 @@ import { isGlobalQuestionDay } from '@/lib/dailyPicker';
 import { callInterviewerModel } from '@/lib/geminiCall';
 import { DailyGuesstimatePairZ, GuesstimateZ, guesstimateResponseSchema } from '@/lib/guesstimateSchema';
 import { INTERVIEWER_IDENTITY } from '@/lib/interviewerPersona';
-import { critiqueQuestion, MAX_CRITIC_ATTEMPTS, type Critique } from '@/lib/questionCritic';
+import { critiqueQuestion, MAX_CRITIC_ATTEMPTS, reviewQuestionPremise, type Critique } from '@/lib/questionCritic';
 import { getRedis, KEYS } from '@/lib/redis';
 import type { Guesstimate } from '@/lib/types';
 
@@ -365,6 +365,41 @@ YOUR SANITY CHECK: ${question.sanityCheck}`;
  * its critique goes on the record, so a shipped-but-doubted question is visibly
  * different in the admin view from one that was actually approved.
  */
+/**
+ * Two reviews, in order, because they fail for different reasons and are fixed
+ * differently.
+ *
+ * The premise is checked first: if the case itself is unsound — a thing that
+ * does not exist, or a number no student could reason toward — then no amount
+ * of reworking the arithmetic helps, and the only fix is a different question.
+ * Only once the question stands does it make sense to argue about its answer.
+ */
+async function reviewPremiseUntilSound(
+  make: () => Promise<Guesstimate>,
+  first: Guesstimate,
+  tries: number
+): Promise<{ question: Guesstimate; critiques: Critique[] }> {
+  const critiques: Critique[] = [];
+  let current = first;
+
+  for (let attempt = 1; attempt <= Math.max(1, tries); attempt += 1) {
+    const review = await reviewQuestionPremise(current, attempt);
+    critiques.push(review);
+    if (review.verdict !== 'reject') return { question: current, critiques };
+    if (attempt === Math.max(1, tries)) break;
+
+    try {
+      current = await make();
+    } catch (error) {
+      // Losing the question entirely is worse than keeping a doubted one.
+      console.warn('premise review: could not draw a replacement question', error);
+      break;
+    }
+  }
+
+  return { question: current, critiques };
+}
+
 async function reviewUntilConfident(
   question: Guesstimate,
   rounds = MAX_CRITIC_ATTEMPTS
@@ -399,6 +434,22 @@ async function reviewUntilConfident(
   return { question: best?.question ?? current, critiques };
 }
 
+/** Premise review, then the answer argument, for one question. */
+async function fullyReview(
+  question: Guesstimate,
+  redraw: () => Promise<Guesstimate>
+): Promise<ReviewedQuestion> {
+  const premise = await reviewPremiseUntilSound(redraw, question, PREMISE_ATTEMPTS);
+  const solution = await reviewUntilConfident(premise.question);
+  return {
+    question: solution.question,
+    critiques: [...premise.critiques, ...solution.critiques],
+  };
+}
+
+/** Redrawing the premise is bounded tighter than reworking a solution: it is a whole new question each time. */
+const PREMISE_ATTEMPTS = 2;
+
 export async function generateReviewedPair(dateStr: string): Promise<{
   pair: [Guesstimate, Guesstimate];
   critiques: Critique[];
@@ -406,7 +457,13 @@ export async function generateReviewedPair(dateStr: string): Promise<{
   const pair = await generateDailyPair(dateStr);
 
   // Reviewed independently so one question's argument doesn't hold up the other.
-  const reviewed = await Promise.all(pair.map((q) => reviewUntilConfident(q)));
+  const reviewed = await Promise.all(
+    pair.map((q) =>
+      fullyReview(q, () =>
+        generateSingleQuestion({ region: q.region, allowAdvanced: isAdvancedQuestionDay(dateStr) })
+      )
+    )
+  );
 
   return {
     pair: [reviewed[0].question, reviewed[1].question],
@@ -420,7 +477,17 @@ export async function generateReviewedQuestion(options: {
   allowAdvanced?: boolean;
   adminBrief?: string;
 }): Promise<ReviewedQuestion> {
-  return reviewUntilConfident(await generateSingleQuestion(options));
+  const question = await generateSingleQuestion(options);
+
+  // An admin's own question is reviewed but never redrawn — they asked for that
+  // case specifically, so a premise objection is advice, not a veto.
+  if (options.adminBrief) {
+    const premise = await reviewQuestionPremise(question, 1);
+    const solution = await reviewUntilConfident(question);
+    return { question: solution.question, critiques: [premise, ...solution.critiques] };
+  }
+
+  return fullyReview(question, () => generateSingleQuestion(options));
 }
 
 /** Persists a day's pair and makes each question individually resolvable. */

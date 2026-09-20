@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getSessionAccountFromCookies, isOwner } from '@/lib/auth';
-import { critiqueQuestion } from '@/lib/questionCritic';
+import { critiqueQuestion, reviewQuestionPremise } from '@/lib/questionCritic';
 import { getDailyPair, getQuestionById } from '@/lib/questionStore';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+// Four tool-using reviews, each of which may search and run code.
+export const maxDuration = 300;
 
 /**
  * Re-runs the critic over today's questions on demand and returns its verdicts.
@@ -55,8 +56,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unknown question' }, { status: 404 });
   }
 
-  // critiqueQuestion never throws — a 'skipped' verdict is a real answer here,
-  // and saying the critic could not run is more useful than a 500.
-  const critiques = await Promise.all(questions.map((q) => critiqueQuestion(q, 1)));
+  // Both stages, matching what generation does and what the report shows — a
+  // re-review that only checked the answer would silently skip the premise,
+  // which is the half that catches a question nobody can picture.
+  //
+  // Neither reviewer throws: a 'skipped' verdict is a real answer here, and
+  // saying a reviewer could not run is more useful than a 500.
+  const critiques = (
+    await Promise.all(
+      questions.map(async (q) => [await reviewQuestionPremise(q, 1), await critiqueQuestion(q, 1)])
+    )
+  ).flat();
+
   return NextResponse.json({ critiques });
 }

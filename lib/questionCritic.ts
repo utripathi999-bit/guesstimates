@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AllModelsBusyError, callInterviewerModel } from '@/lib/geminiCall';
+import { AllModelsBusyError, callInterviewerModel, parseLooseJson } from '@/lib/geminiCall';
 import { getRedis, isRedisConfigured, KEYS } from '@/lib/redis';
 import type { Guesstimate } from '@/lib/types';
 
@@ -19,6 +19,14 @@ import type { Guesstimate } from '@/lib/types';
  * to derive its own number by a different route and is scored on whether the
  * two agree — it cannot pass a question by simply restating its reasoning.
  */
+
+/**
+ * Search for real benchmarks, code execution to actually run the arithmetic.
+ * Both were chosen against failures that already happened rather than in the
+ * abstract: a market figure recalled instead of looked up, and a 10x typo that
+ * survived because the chain was read rather than computed.
+ */
+const REVIEW_TOOLS = [{ googleSearch: {} }, { codeExecution: {} }];
 
 const ACCEPTABLE_RATIO = 3;
 
@@ -67,6 +75,17 @@ const CRITIC_INSTRUCTION = `You are a senior consultant reviewing a guesstimate 
 candidates. You did not write it. Your job is to find out whether its answer is actually right, and you are
 judged on catching bad numbers, not on being agreeable.
 
+YOU HAVE TWO TOOLS. USE THEM — THEY ARE THE POINT.
+- GOOGLE SEARCH: look up the real figures. Do not estimate from memory what you could check in one search.
+  A case that asked for daily e-commerce parcels in Delhi NCR was answered 300,000 and shipped, roughly 5x
+  low, because the writer and the reviewer were both recalling Indian market data instead of looking it up.
+  Search for the national or market-level total you need — annual shipments, total market size, sector
+  revenue, population — and anchor your own estimate on what you find. Say in "method" what you looked up.
+- CODE EXECUTION: run their arithmetic rather than reading it. Multiply the chain out step by step and check
+  each step's stated result against what the numbers actually produce, and that the final answer follows from
+  the last step. A case understated a figure by 10x through a typo (90 million x 250 written as 22,500 crore
+  instead of 2,250 crore) — executing it catches that class of error every time, reading it does not.
+
 DO THIS FIRST, BEFORE READING THEIR REASONING CLOSELY:
 Derive your own answer to the question, from scratch, using a DIFFERENT route than the solution took. If the
 solution worked bottom-up from households or units, come top-down from a national or market-level total and
@@ -90,7 +109,12 @@ THEN CHECK FOR THESE SPECIFIC DEFECTS, which are the ones that actually occur:
 "fatalFlaw" is true if ANY of the above is present, regardless of how close your number is.
 "concerns" lists the specific problems, each naming the actual figure or step at fault. Empty if genuinely
 none — do not invent concerns to look diligent.
-"reasoning" is 2-3 sentences: your route, your number, and whether you believe theirs.`;
+"reasoning" is 2-3 sentences: your route, your number, and whether you believe theirs. Name any figure you
+looked up rather than assumed.
+
+OUTPUT: reply with ONLY a JSON object, no prose around it and no markdown fence:
+{"independentEstimate": <number in the question's unit>, "method": "<your route, naming what you looked up>",
+ "concerns": ["<specific problem>"], "fatalFlaw": <true|false>, "reasoning": "<2-3 sentences>"}`;
 
 function ratioBetween(a: number, b: number): number {
   if (a <= 0 || b <= 0) return Infinity;
@@ -148,14 +172,19 @@ export async function critiqueQuestion(question: Guesstimate, attempt = 1): Prom
     const { raw } = await callInterviewerModel({
       systemInstruction: CRITIC_INSTRUCTION,
       userMessage: describeForCritic(question),
+      // Unused while tools are on — the API won't enforce a schema alongside
+      // them — but kept so turning tools off restores constrained output.
       responseSchema: critiqueResponseSchema,
+      tools: REVIEW_TOOLS,
       // Low temperature: this is an assessment, not a creative task.
       temperature: 0.2,
-      maxOutputTokens: 2048,
+      // Room for several tool calls and their results before the verdict.
+      maxOutputTokens: 8192,
     });
 
-    const parsed = CritiqueZ.safeParse(JSON.parse(raw));
+    const parsed = CritiqueZ.safeParse(parseLooseJson<unknown>(raw));
     if (!parsed.success) {
+      console.warn('critic: unreadable verdict for', question.id, '—', raw.slice(0, 200));
       return { ...base, verdict: 'skipped', ratio: null, skipReason: 'Critic returned an unreadable verdict.' };
     }
 

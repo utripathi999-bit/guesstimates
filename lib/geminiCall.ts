@@ -53,6 +53,15 @@ export interface InterviewerCallOptions {
    * a full case with steps and assumptions does not fit in a chat-sized budget.
    */
   maxOutputTokens?: number;
+  /**
+   * Lets the model look things up or run code before answering.
+   *
+   * Mutually exclusive with `responseSchema`: the API will not enforce a
+   * response schema on a call that also has tools enabled, because the model
+   * needs free turns to call them. Callers that pass tools therefore have to
+   * ask for JSON in the prompt and parse it defensively — see parseLooseJson.
+   */
+  tools?: { googleSearch?: object; codeExecution?: object }[];
 }
 
 export interface InterviewerCallResult {
@@ -75,8 +84,10 @@ export async function callInterviewerModel({
   responseSchema,
   temperature,
   maxOutputTokens = 2048,
+  tools,
 }: InterviewerCallOptions): Promise<InterviewerCallResult> {
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  const usingTools = Boolean(tools?.length);
   let lastError: unknown;
 
   for (const model of MODEL_CHAIN) {
@@ -86,10 +97,15 @@ export async function callInterviewerModel({
         contents: [{ role: 'user', parts: [{ text: userMessage }] }],
         config: {
           systemInstruction,
-          responseMimeType: 'application/json',
-          responseSchema,
+          // Schema-constrained output and tool use cannot both be on, so a
+          // tool-using call asks for JSON in its prompt instead.
+          ...(usingTools
+            ? { tools }
+            : { responseMimeType: 'application/json', responseSchema }),
           temperature,
-          thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+          // Tool use needs room to think between calls; a minimal budget makes
+          // the model skip the lookup it was given the tool for.
+          thinkingConfig: { thinkingLevel: usingTools ? ThinkingLevel.LOW : ThinkingLevel.MINIMAL },
           maxOutputTokens,
         },
       });
@@ -113,4 +129,27 @@ export async function callInterviewerModel({
   // to be able to say so rather than reporting a generic failure the student
   // will read as "the app is broken".
   throw new AllModelsBusyError(lastError instanceof Error ? lastError.message : String(lastError));
+}
+
+/**
+ * Pulls a JSON object out of a reply that wasn't schema-constrained.
+ *
+ * Only needed for tool-using calls, where the API won't enforce a schema. The
+ * model reliably produces the right shape when asked, but wraps it in prose or
+ * a ```json fence often enough that trusting JSON.parse on the whole reply
+ * would throw away good reviews over formatting.
+ */
+export function parseLooseJson<T>(raw: string): T | null {
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const candidates = [fenced?.[1], raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1), raw];
+
+  for (const candidate of candidates) {
+    if (!candidate?.trim()) continue;
+    try {
+      return JSON.parse(candidate) as T;
+    } catch {
+      // Try the next shape.
+    }
+  }
+  return null;
 }

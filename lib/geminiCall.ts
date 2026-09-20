@@ -48,6 +48,11 @@ export interface InterviewerCallOptions {
   /** Gemini structured-output schema for the reply. */
   responseSchema: Record<string, unknown>;
   temperature: number;
+  /**
+   * Defaults to enough room for a short reply. Generation needs far more —
+   * a full case with steps and assumptions does not fit in a chat-sized budget.
+   */
+  maxOutputTokens?: number;
 }
 
 export interface InterviewerCallResult {
@@ -69,6 +74,7 @@ export async function callInterviewerModel({
   userMessage,
   responseSchema,
   temperature,
+  maxOutputTokens = 2048,
 }: InterviewerCallOptions): Promise<InterviewerCallResult> {
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   let lastError: unknown;
@@ -84,7 +90,7 @@ export async function callInterviewerModel({
           responseSchema,
           temperature,
           thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
-          maxOutputTokens: 2048,
+          maxOutputTokens,
         },
       });
 

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getSessionAccountFromCookies, isOwner } from '@/lib/auth';
+import { getCritiques, saveCritiques, type Critique } from '@/lib/questionCritic';
 import {
-  generateDailyPair,
-  generateSingleQuestion,
+  generateReviewedPair,
+  generateReviewedQuestion,
   isAdvancedQuestionDay,
   saveDailyPair,
 } from '@/lib/questionGenerator';
@@ -11,7 +12,7 @@ import { getDailyPair, getUtcDateString } from '@/lib/questionStore';
 
 export const dynamic = 'force-dynamic';
 // Generation is a couple of model calls; the default function timeout is tight for two.
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const ActionZ = z.discriminatedUnion('action', [
   /** Throw away today's pair and generate a fresh one. */
@@ -43,6 +44,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     date: daily.date,
     source: daily.source,
+    critiques: await getCritiques(daily.date),
     questions: daily.questions.map((q) => ({
       id: q.id,
       title: q.title,
@@ -81,11 +83,13 @@ export async function POST(request: NextRequest) {
 
   try {
     if (command.action === 'regenerateAll') {
-      const pair = await generateDailyPair(today);
+      const { pair, critiques } = await generateReviewedPair(today);
       await saveDailyPair(today, pair);
+      await saveCritiques(today, critiques);
       return NextResponse.json({
         success: true,
         questions: pair.map((q) => ({ id: q.id, title: q.title, region: q.region, difficulty: q.difficulty })),
+        critiques,
       });
     }
 
@@ -97,23 +101,28 @@ export async function POST(request: NextRequest) {
     }
 
     const replaced = current.questions[index];
-    const replacement =
+    const reviewed =
       command.action === 'replaceWithBrief'
-        ? await generateSingleQuestion({ adminBrief: command.brief })
-        : await generateSingleQuestion({
+        ? await generateReviewedQuestion({ adminBrief: command.brief })
+        : await generateReviewedQuestion({
             // Keep the day's region mix intact when swapping a question out.
             region: replaced.region,
             allowAdvanced: isAdvancedQuestionDay(today),
           });
 
     const nextPair = [...current.questions];
-    nextPair[index] = replacement;
+    nextPair[index] = reviewed.question;
     await saveDailyPair(today, nextPair);
+
+    // Keep the other question's critiques; replace only this one's.
+    const kept = (await getCritiques(today)).filter((c) => c.questionId !== replaced.id);
+    await saveCritiques(today, [...kept, ...reviewed.critiques] as Critique[]);
 
     return NextResponse.json({
       success: true,
       replacedTitle: replaced.title,
       questions: nextPair.map((q) => ({ id: q.id, title: q.title, region: q.region, difficulty: q.difficulty })),
+      critiques: reviewed.critiques,
     });
   } catch (error) {
     console.error('admin question action failed:', error);

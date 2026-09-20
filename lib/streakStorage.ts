@@ -10,16 +10,12 @@ import type { StreakData } from '@/lib/types';
 
 const STORAGE_KEY = 'guesstimateDaily:v1';
 
-const STARTING_FREEZES = 1;
-
 const DEFAULT_STATE: StreakData = {
   currentStreak: 0,
   longestStreak: 0,
   lastCompletedDate: null,
   totalCompleted: 0,
   xp: 0,
-  freezesAvailable: STARTING_FREEZES,
-  freezesUsedDates: [],
   completedQuestionIds: [],
   attemptedQuestionIds: [],
   bookmarkedIds: [],

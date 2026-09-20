@@ -1,7 +1,8 @@
-import { GoogleGenAI } from '@google/genai';
 import { isGlobalQuestionDay } from '@/lib/dailyPicker';
+import { callInterviewerModel } from '@/lib/geminiCall';
 import { DailyGuesstimatePairZ, GuesstimateZ, guesstimateResponseSchema } from '@/lib/guesstimateSchema';
 import { INTERVIEWER_IDENTITY } from '@/lib/interviewerPersona';
+import { critiqueQuestion, MAX_CRITIC_ATTEMPTS, type Critique } from '@/lib/questionCritic';
 import { getRedis, KEYS } from '@/lib/redis';
 import type { Guesstimate } from '@/lib/types';
 
@@ -10,8 +11,6 @@ import type { Guesstimate } from '@/lib/types';
  * a question swapped in by hand is built to exactly the same standard as one
  * generated automatically.
  */
-
-const MODEL = 'gemini-3.5-flash';
 
 /**
  * Advanced questions are rare on purpose. A daily habit dies if the daily
@@ -216,20 +215,18 @@ export async function getRecentTitles(limit = 20): Promise<string[]> {
 async function callModel(prompt: string): Promise<unknown> {
   if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured');
 
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  const response = await ai.models.generateContent({
-    model: MODEL,
-    contents: prompt,
-    config: {
-      responseMimeType: 'application/json',
-      responseSchema: guesstimateResponseSchema,
-      temperature: 0.9,
-    },
+  // Runs down the shared model chain rather than pinning one model: generation
+  // used to be the only path with no fallback, which meant a capacity spike at
+  // 05:30 would have handed the whole batch yesterday's seed questions.
+  const { raw } = await callInterviewerModel({
+    systemInstruction: 'You write guesstimate interview cases. Reply only with JSON matching the schema.',
+    userMessage: prompt,
+    responseSchema: guesstimateResponseSchema,
+    temperature: 0.9,
+    // A full case with steps, items and assumptions does not fit a chat budget.
+    maxOutputTokens: 16384,
   });
-
-  const rawText = response.text;
-  if (!rawText) throw new Error('Empty response from model');
-  return JSON.parse(rawText);
+  return JSON.parse(raw);
 }
 
 export async function generateDailyPair(dateStr: string): Promise<[Guesstimate, Guesstimate]> {
@@ -277,6 +274,91 @@ export async function generateSingleQuestion(options: {
     throw new Error(`Generated question failed schema validation: ${validation.error.issues[0]?.message}`);
   }
   return validation.data as Guesstimate;
+}
+
+export interface ReviewedQuestion {
+  question: Guesstimate;
+  /** Every attempt's verdict, oldest first — the audit trail the admin reads. */
+  critiques: Critique[];
+}
+
+/**
+ * Generates a question and puts it past the critic, regenerating while it keeps
+ * failing review.
+ *
+ * Bounded deliberately. The cron has a wall clock, and a model having a bad day
+ * must not turn into an unbounded retry loop, so after MAX_CRITIC_ATTEMPTS we
+ * ship the best attempt we saw rather than nothing — a question the critic
+ * disliked is still far better than no questions at all. The critique goes on
+ * the record either way, so a shipped-but-doubted question is visible in the
+ * admin view rather than silently equivalent to an approved one.
+ */
+async function generateReviewed(
+  make: () => Promise<Guesstimate>,
+  attemptsAllowed = MAX_CRITIC_ATTEMPTS
+): Promise<ReviewedQuestion> {
+  const critiques: Critique[] = [];
+  let best: { question: Guesstimate; ratio: number } | null = null;
+
+  for (let attempt = 1; attempt <= attemptsAllowed; attempt += 1) {
+    const question = await make();
+    const critique = await critiqueQuestion(question, attempt);
+    critiques.push(critique);
+
+    // 'skipped' means the critic itself could not run. Retrying would just burn
+    // the budget on the same outage, so take the question and move on.
+    if (critique.verdict !== 'reject') return { question, critiques };
+
+    const ratio = critique.ratio ?? Infinity;
+    if (!best || ratio < best.ratio) best = { question, ratio };
+  }
+
+  return { question: best!.question, critiques };
+}
+
+export async function generateReviewedPair(dateStr: string): Promise<{
+  pair: [Guesstimate, Guesstimate];
+  critiques: Critique[];
+}> {
+  const pair = await generateDailyPair(dateStr);
+  const allCritiques: Critique[] = [];
+
+  // Reviewed one at a time so a single bad question is replaced on its own
+  // rather than throwing away a good one alongside it.
+  const reviewed = await Promise.all(
+    pair.map(async (original) => {
+      const first = await critiqueQuestion(original, 1);
+      if (first.verdict !== 'reject') return { question: original, critiques: [first] };
+
+      const retried = await generateReviewed(
+        () =>
+          generateSingleQuestion({
+            region: original.region,
+            allowAdvanced: isAdvancedQuestionDay(dateStr),
+          }),
+        MAX_CRITIC_ATTEMPTS - 1
+      );
+      return { question: retried.question, critiques: [first, ...retried.critiques] };
+    })
+  );
+
+  for (const entry of reviewed) allCritiques.push(...entry.critiques);
+  return { pair: [reviewed[0].question, reviewed[1].question], critiques: allCritiques };
+}
+
+/** A single replacement question, reviewed the same way the daily pair is. */
+export async function generateReviewedQuestion(options: {
+  region?: 'India' | 'Global';
+  allowAdvanced?: boolean;
+  adminBrief?: string;
+}): Promise<ReviewedQuestion> {
+  // An admin's own question is reviewed too, but never replaced — they asked
+  // for that case specifically, so the critique is advice, not a veto.
+  if (options.adminBrief) {
+    const question = await generateSingleQuestion(options);
+    return { question, critiques: [await critiqueQuestion(question, 1)] };
+  }
+  return generateReviewed(() => generateSingleQuestion(options));
 }
 
 /** Persists a day's pair and makes each question individually resolvable. */

@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { CheckCircle2, Circle, Flame, Globe2, MapPin, Snowflake, Sparkles, Trophy } from 'lucide-react';
+import { CheckCircle2, Circle, Flame, Globe2, MapPin, Sparkles, Trophy } from 'lucide-react';
 import Link from 'next/link';
 import { useMemo } from 'react';
 import { Badge } from '@/components/ui/Badge';
@@ -20,7 +20,7 @@ const STAT_TILES = [
   { key: 'currentStreak', label: 'Day Streak', icon: Flame, from: '#ffdca8', to: '#ffb44d', text: '#8a4b00' },
   { key: 'longestStreak', label: 'Best Streak', icon: Trophy, from: '#fff0ad', to: '#ffe066', text: '#836a00' },
   { key: 'xp', label: 'Total XP', icon: Sparkles, from: '#aee6fd', to: '#7ed2fb', text: '#0a5b82' },
-  { key: 'freezesAvailable', label: 'Streak Freeze', icon: Snowflake, from: '#c8e9fd', to: '#9fd6fb', text: '#0a5b82' },
+  { key: 'totalCompleted', label: 'Solved', icon: CheckCircle2, from: '#c8e9fd', to: '#9fd6fb', text: '#0a5b82' },
 ] as const;
 
 function QuestionCard({ guesstimate, status }: { guesstimate: Guesstimate; status: QuestionStatus }) {
@@ -72,7 +72,7 @@ export function TodayView({ dailyPair, source }: TodayViewProps) {
     currentStreak: progress.currentStreak,
     longestStreak: progress.longestStreak,
     xp: progress.points,
-    freezesAvailable: progress.freezesAvailable,
+    totalCompleted: progress.totalCompleted,
   };
 
   return (

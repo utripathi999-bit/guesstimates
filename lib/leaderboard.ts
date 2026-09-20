@@ -1,4 +1,5 @@
 import { listAllAccounts } from '@/lib/auth';
+import { getProgress } from '@/lib/progress';
 import { getRedis, isRedisConfigured, KEYS } from '@/lib/redis';
 import { getUtcDateString } from '@/lib/questionStore';
 import { getWeekResetAt, getWeekStart } from '@/lib/week';
@@ -26,16 +27,19 @@ export async function removeUserFromLeaderboard(normalizedEmail: string): Promis
   await pipeline.exec();
 }
 
-/** Live streak + lifetime points for one account, defaulting to zero on any read trouble. */
-async function readStreakHash(normalizedEmail: string): Promise<{ points: number; streak: number }> {
+/**
+ * Lifetime points and the *live* streak for one account.
+ *
+ * Reads the progress record rather than the mirrored streak hash, because the
+ * mirror stores only the streak number and not the date it was earned — so it
+ * cannot tell a real 5-day streak from a 5-day streak abandoned last month.
+ * That is exactly how lapsed students ended up displaying streaks they no
+ * longer had, and out-ranking active ones on the streak tiebreak.
+ */
+async function readStanding(normalizedEmail: string, todayStr: string): Promise<{ points: number; streak: number }> {
   try {
-    const raw = await getRedis().hgetall<{ points?: string | number; currentStreak?: string | number }>(
-      KEYS.userStreak(normalizedEmail)
-    );
-    return {
-      points: Number(raw?.points ?? 0) || 0,
-      streak: Number(raw?.currentStreak ?? 0) || 0,
-    };
+    const progress = await getProgress(normalizedEmail, todayStr);
+    return { points: Number(progress.points) || 0, streak: Number(progress.currentStreak) || 0 };
   } catch {
     return { points: 0, streak: 0 };
   }
@@ -68,7 +72,8 @@ export async function getFullLeaderboard(): Promise<LeaderboardEntry[]> {
   const accounts = await listAllAccounts();
   if (accounts.length === 0) return [];
 
-  const scores = await Promise.all(accounts.map((account) => readStreakHash(account.email)));
+  const todayStr = getUtcDateString();
+  const scores = await Promise.all(accounts.map((account) => readStanding(account.email, todayStr)));
 
   return rank(
     accounts.map((account, i) => ({
@@ -115,7 +120,7 @@ export async function getWeeklyLeaderboard(now: Date = new Date()): Promise<Week
     console.error('leaderboard: weekly read failed', error);
   }
 
-  const streaks = await Promise.all(accounts.map((account) => readStreakHash(account.email)));
+  const streaks = await Promise.all(accounts.map((account) => readStanding(account.email, today)));
 
   const entries = rank(
     accounts.map((account, i) => {

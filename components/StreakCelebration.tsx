@@ -1,7 +1,7 @@
 'use client';
 
 import confetti from 'canvas-confetti';
-import { Flame, Snowflake } from 'lucide-react';
+import { Flame } from 'lucide-react';
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -10,7 +10,6 @@ interface StreakCelebrationProps {
   open: boolean;
   onClose: () => void;
   streak: number;
-  freezeUsed?: boolean;
   /** Whether both of today's questions are done, or just the one. */
   bothDone?: boolean;
   pointsEarned?: number;
@@ -38,7 +37,6 @@ export function StreakCelebration({
   open,
   onClose,
   streak,
-  freezeUsed,
   bothDone,
   pointsEarned = 0,
 }: StreakCelebrationProps) {
@@ -75,13 +73,6 @@ export function StreakCelebration({
 
         {!bothDone && (
           <p className="text-sm text-text-muted">Solve the other one today for a bonus.</p>
-        )}
-
-        {freezeUsed && (
-          <div className="flex items-center gap-2 rounded-xl bg-callout-info px-3 py-2 text-sm font-bold text-callout-info-text">
-            <Snowflake className="h-4 w-4" strokeWidth={2.5} />
-            A streak freeze saved yesterday&apos;s gap!
-          </div>
         )}
 
         <Button variant="primary" size="md" onClick={onClose} className="mt-2 w-full">

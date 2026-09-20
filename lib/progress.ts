@@ -1,5 +1,8 @@
 import { getRedis, isRedisConfigured, KEYS } from '@/lib/redis';
+import { effectiveStreak } from '@/lib/streakMath';
 import { getWeekStart } from '@/lib/week';
+
+export { effectiveStreak } from '@/lib/streakMath';
 
 /**
  * SERVER-AUTHORITATIVE progress and scoring.
@@ -25,8 +28,6 @@ export const POINTS = {
   MAX_STREAK_MULTIPLIER: 10,
 } as const;
 
-const STARTING_FREEZES = 1;
-
 export interface UserProgress {
   points: number;
   currentStreak: number;
@@ -39,7 +40,6 @@ export interface UserProgress {
   dailyCompletionDates: string[];
   /** Days BOTH questions were finished — tracked separately so the bonus pays once. */
   bothCompletedDates: string[];
-  freezesAvailable: number;
   totalCompleted: number;
 }
 
@@ -52,18 +52,11 @@ export const EMPTY_PROGRESS: UserProgress = {
   attemptedQuestionIds: [],
   dailyCompletionDates: [],
   bothCompletedDates: [],
-  freezesAvailable: STARTING_FREEZES,
   totalCompleted: 0,
 };
 
-/** Days between two YYYY-MM-DD strings (b - a), parsed at UTC noon to sidestep DST edges. */
-function daysBetween(a: string, b: string): number {
-  const dateA = new Date(`${a}T12:00:00Z`).getTime();
-  const dateB = new Date(`${b}T12:00:00Z`).getTime();
-  return Math.round((dateB - dateA) / (1000 * 60 * 60 * 24));
-}
-
-export async function getProgress(normalizedEmail: string): Promise<UserProgress> {
+/** Exactly what is in storage — for the scoring path, which needs the raw value. */
+async function getStoredProgress(normalizedEmail: string): Promise<UserProgress> {
   if (!isRedisConfigured()) return { ...EMPTY_PROGRESS };
   try {
     const raw = await getRedis().get<UserProgress>(KEYS.userProgress(normalizedEmail));
@@ -73,6 +66,29 @@ export async function getProgress(normalizedEmail: string): Promise<UserProgress
     console.error('progress: read failed', error);
     return { ...EMPTY_PROGRESS };
   }
+}
+
+/**
+ * Progress as the student should see it. Every path that hands progress back —
+ * reads and writes alike — goes through here, so a lapsed streak cannot escape
+ * to the UI or the leaderboard through some path that forgot to decay it.
+ */
+function asViewed(progress: UserProgress, todayStr: string): UserProgress {
+  return {
+    ...progress,
+    currentStreak: effectiveStreak(progress.currentStreak, progress.lastCompletedDate, todayStr),
+  };
+}
+
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+export async function getProgress(
+  normalizedEmail: string,
+  todayStr: string = today()
+): Promise<UserProgress> {
+  return asViewed(await getStoredProgress(normalizedEmail), todayStr);
 }
 
 async function saveProgress(normalizedEmail: string, progress: UserProgress): Promise<void> {
@@ -122,15 +138,15 @@ export async function recordAttempt(
   questionId: string,
   todayStr: string
 ): Promise<UserProgress> {
-  const progress = await getProgress(normalizedEmail);
-  if (progress.attemptedQuestionIds.includes(questionId)) return progress;
+  const progress = await getStoredProgress(normalizedEmail);
+  if (progress.attemptedQuestionIds.includes(questionId)) return asViewed(progress, todayStr);
 
   progress.attemptedQuestionIds.push(questionId);
   progress.points += POINTS.ATTEMPT;
 
   await saveProgress(normalizedEmail, progress);
   await awardWeekly(normalizedEmail, POINTS.ATTEMPT, todayStr);
-  return progress;
+  return asViewed(progress, todayStr);
 }
 
 export interface SolveResult {
@@ -140,7 +156,6 @@ export interface SolveResult {
   streakAdvanced: boolean;
   /** Both of today's questions are now done (earns the extra bonus, once). */
   bothDoneToday: boolean;
-  freezeUsed: boolean;
   /** False when this question was already solved — nothing was awarded. */
   counted: boolean;
 }
@@ -159,16 +174,15 @@ export async function recordSolve(
   todaysIds: string[],
   todayStr: string
 ): Promise<SolveResult> {
-  const progress = await getProgress(normalizedEmail);
+  const progress = await getStoredProgress(normalizedEmail);
   let pointsEarned = 0;
 
   if (progress.completedQuestionIds.includes(questionId)) {
     return {
-      progress,
+      progress: asViewed(progress, todayStr),
       pointsEarned: 0,
       streakAdvanced: false,
       bothDoneToday: false,
-      freezeUsed: false,
       counted: false,
     };
   }
@@ -184,7 +198,6 @@ export async function recordSolve(
   }
 
   let streakAdvanced = false;
-  let freezeUsed = false;
 
   const solvedToday = todaysIds.filter((id) => progress.completedQuestionIds.includes(id)).length;
   const solvedAnyToday = solvedToday > 0;
@@ -197,21 +210,11 @@ export async function recordSolve(
     streakAdvanced = true;
     progress.dailyCompletionDates.push(todayStr);
 
-    if (progress.lastCompletedDate === null) {
-      progress.currentStreak = 1;
-    } else {
-      const gap = daysBetween(progress.lastCompletedDate, todayStr);
-      if (gap === 1) {
-        progress.currentStreak += 1;
-      } else if (gap === 2 && progress.freezesAvailable > 0) {
-        // Exactly one day missed — spend a freeze to bridge it.
-        progress.freezesAvailable -= 1;
-        progress.currentStreak += 1;
-        freezeUsed = true;
-      } else if (gap > 1) {
-        progress.currentStreak = 1;
-      }
-    }
+    // Yesterday continues the run; any longer gap starts a new one. Derived
+    // from the same rule as effectiveStreak, so what the student was shown
+    // before solving and what they get after solving cannot disagree.
+    const carried = effectiveStreak(progress.currentStreak, progress.lastCompletedDate, todayStr);
+    progress.currentStreak = carried + 1;
 
     // Back-to-back days are worth more, capped so a long streak doesn't make
     // the board unwinnable for someone joining late. A broken streak resets to
@@ -232,5 +235,5 @@ export async function recordSolve(
   await saveProgress(normalizedEmail, progress);
   await awardWeekly(normalizedEmail, pointsEarned, todayStr);
 
-  return { progress, pointsEarned, streakAdvanced, bothDoneToday, freezeUsed, counted: true };
+  return { progress: asViewed(progress, todayStr), pointsEarned, streakAdvanced, bothDoneToday, counted: true };
 }

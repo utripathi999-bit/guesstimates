@@ -83,8 +83,6 @@ export interface StreakData {
   lastCompletedDate: string | null; // YYYY-MM-DD
   totalCompleted: number;
   xp: number;
-  freezesAvailable: number;
-  freezesUsedDates: string[];
   completedQuestionIds: string[];
   /** Every question ever opened — attempt points are awarded once per id. */
   attemptedQuestionIds: string[];

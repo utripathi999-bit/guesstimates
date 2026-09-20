@@ -35,7 +35,6 @@ export function GuesstimateView({ guesstimate }: GuesstimateViewProps) {
   const [saving, setSaving] = useState(false);
   const [celebration, setCelebration] = useState<{
     streak: number;
-    freezeUsed: boolean;
     bothDone: boolean;
     pointsEarned: number;
   } | null>(null);
@@ -68,7 +67,6 @@ export function GuesstimateView({ guesstimate }: GuesstimateViewProps) {
     if (outcome?.streakAdvanced) {
       setCelebration({
         streak: outcome.streak,
-        freezeUsed: outcome.freezeUsed,
         bothDone: outcome.bothDoneToday,
         pointsEarned: outcome.pointsEarned,
       });
@@ -165,7 +163,6 @@ export function GuesstimateView({ guesstimate }: GuesstimateViewProps) {
         open={celebration !== null}
         onClose={() => setCelebration(null)}
         streak={celebration?.streak ?? 0}
-        freezeUsed={celebration?.freezeUsed ?? false}
         bothDone={celebration?.bothDone ?? false}
         pointsEarned={celebration?.pointsEarned ?? 0}
       />

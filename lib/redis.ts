@@ -39,6 +39,9 @@ export const KEYS = {
   /** List of all guesstimate ids ever generated, newest first. */
   archive: 'guesstimates:archive' as const,
 
+  /** The critic's verdicts on a day's questions, kept as an audit trail for the admin. */
+  critiques: (date: string): string => `guesstimates:critiques:${date}`,
+
   /** A single AI-generated guesstimate, stored by id so it stays resolvable after its day passes. */
   question: (id: string): string => `guesstimates:item:${id}`,
 

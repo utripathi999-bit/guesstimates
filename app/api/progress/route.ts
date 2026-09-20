@@ -69,7 +69,6 @@ export async function POST(request: NextRequest) {
       pointsEarned: result.pointsEarned,
       streakAdvanced: result.streakAdvanced,
       bothDoneToday: result.bothDoneToday,
-      freezeUsed: result.freezeUsed,
       counted: result.counted,
     });
   } catch (error) {

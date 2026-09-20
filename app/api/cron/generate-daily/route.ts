@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateDailyPair, saveDailyPair } from '@/lib/questionGenerator';
+import { saveCritiques } from '@/lib/questionCritic';
+import { generateReviewedPair, saveDailyPair } from '@/lib/questionGenerator';
 import { getUtcDateString } from '@/lib/questionStore';
 
 export const dynamic = 'force-dynamic';
+// Generation plus review plus any regeneration is several model calls.
+export const maxDuration = 300;
 
 /**
  * Nightly generation. The prompt-building and validation live in
@@ -22,9 +25,24 @@ export async function GET(request: NextRequest) {
   const today = getUtcDateString();
 
   try {
-    const pair = await generateDailyPair(today);
+    const { pair, critiques } = await generateReviewedPair(today);
     await saveDailyPair(today, pair);
-    return NextResponse.json({ success: true, date: today, questionIds: pair.map((q) => q.id) });
+    // Stored after the questions, never before: the audit trail is useful, but
+    // losing it must not cost the batch its questions.
+    await saveCritiques(today, critiques);
+
+    return NextResponse.json({
+      success: true,
+      date: today,
+      questionIds: pair.map((q) => q.id),
+      review: critiques.map((c) => ({
+        title: c.title,
+        verdict: c.verdict,
+        ratio: c.ratio,
+        attempt: c.attempt,
+        concerns: c.concerns ?? [],
+      })),
+    });
   } catch (error) {
     console.error('generate-daily cron failed:', error);
     return NextResponse.json(

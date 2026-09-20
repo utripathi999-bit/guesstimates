@@ -9,7 +9,6 @@ export interface SolveOutcome {
   pointsEarned: number;
   streakAdvanced: boolean;
   bothDoneToday: boolean;
-  freezeUsed: boolean;
   streak: number;
 }
 
@@ -101,15 +100,13 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
           pointsEarned: number;
           streakAdvanced: boolean;
           bothDoneToday: boolean;
-          freezeUsed: boolean;
-        } = await res.json();
+                } = await res.json();
 
         setProgress(data.progress);
         return {
           pointsEarned: data.pointsEarned,
           streakAdvanced: data.streakAdvanced,
           bothDoneToday: data.bothDoneToday,
-          freezeUsed: data.freezeUsed,
           streak: data.progress.currentStreak,
         };
       } catch {

@@ -278,44 +278,125 @@ export async function generateSingleQuestion(options: {
 
 export interface ReviewedQuestion {
   question: Guesstimate;
-  /** Every attempt's verdict, oldest first — the audit trail the admin reads. */
+  /** Every round's verdict, oldest first — the audit trail the admin reads. */
   critiques: Critique[];
 }
 
 /**
- * Generates a question and puts it past the critic, regenerating while it keeps
- * failing review.
+ * Reworks the solution to a question the critic rejected, keeping the question
+ * itself intact.
  *
- * Bounded deliberately. The cron has a wall clock, and a model having a bad day
- * must not turn into an unbounded retry loop, so after MAX_CRITIC_ATTEMPTS we
- * ship the best attempt we saw rather than nothing — a question the critic
- * disliked is still far better than no questions at all. The critique goes on
- * the record either way, so a shipped-but-doubted question is visible in the
- * admin view rather than silently equivalent to an approved one.
+ * The case being asked is rarely the problem — the parcel question was a
+ * perfectly good thing to ask, and only its *working* was wrong. Throwing the
+ * whole case away and drawing a new topic would discard a good question to fix
+ * a bad calculation, and would also mean the critic's specific objections were
+ * never actually answered by anyone. So the writer is handed the reviewer's
+ * independent number and every concern raised, and asked to produce the working
+ * again for the same question.
  */
-async function generateReviewed(
-  make: () => Promise<Guesstimate>,
-  attemptsAllowed = MAX_CRITIC_ATTEMPTS
-): Promise<ReviewedQuestion> {
-  const critiques: Critique[] = [];
-  let best: { question: Guesstimate; ratio: number } | null = null;
-  // At least one attempt, always: a caller passing 0 must not mean "no question".
-  const attempts = Math.max(1, attemptsAllowed);
+async function reviseSolution(question: Guesstimate, critique: Critique): Promise<Guesstimate> {
+  const concerns = (critique.concerns ?? []).map((c) => `- ${c}`).join('\n');
+  const prompt = `${INTERVIEWER_IDENTITY}
 
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    const question = await make();
-    const critique = await critiqueQuestion(question, attempt);
-    critiques.push(critique);
+You wrote the case below. A senior reviewer worked the same question independently and disagrees with your
+answer. Rework it.
 
-    // 'skipped' means the critic itself could not run. Retrying would just burn
-    // the budget on the same outage, so take the question and move on.
-    if (critique.verdict !== 'reject') return { question, critiques };
+${describeCaseForRevision(question)}
 
-    const ratio = critique.ratio ?? Infinity;
-    if (!best || ratio < best.ratio) best = { question, ratio };
+THE REVIEWER'S INDEPENDENT ANSWER: ${critique.independentEstimate ?? '(not given)'} ${question.answer?.unit ?? ''}
+THEIR ROUTE: ${critique.method ?? '(not given)'}
+WHAT THEY SAID: ${critique.reasoning ?? '(not given)'}
+
+THEIR SPECIFIC OBJECTIONS:
+${concerns || '- (none itemised; the gap between the two answers is the objection)'}
+
+REWORK IT AS FOLLOWS:
+- Keep the SAME question, title, and the same thing being estimated in the same unit. You are fixing the
+  working, not choosing a new case.
+- Address every objection above explicitly in the numbers you choose. If they say a segment was set to zero,
+  give it a real non-zero value. If they say a frequency is too low, raise it to something defensible and say
+  in sourceOrLogic why that number.
+- You are NOT required to land on the reviewer's number. If you believe your approach was right, you may keep
+  it — but then the reasoning must answer their objection head-on rather than ignoring it.
+- Rebuild "sanityCheck" as a genuine independent test benchmarked against the RIGHT reference class. A metro
+  compared against a national per-capita average is not a passing check.
+- "answer.value" must equal what your final step now arrives at.
+
+${QUALITY_RULES}`;
+
+  const parsed = await callModel(prompt);
+  const candidate = Array.isArray(parsed) ? parsed[0] : parsed;
+  const validation = GuesstimateZ.safeParse(candidate);
+  if (!validation.success) {
+    throw new Error(`Revised question failed schema validation: ${validation.error.issues[0]?.message}`);
   }
 
-  return { question: best!.question, critiques };
+  // Identity is ours, not the model's: the id keeps any committed estimates
+  // attached, and the title is what the student already read.
+  return { ...(validation.data as Guesstimate), id: question.id, title: question.title };
+}
+
+function describeCaseForRevision(question: Guesstimate): string {
+  const steps = question.steps
+    .map(
+      (s) =>
+        `  Step ${s.stepNumber} — ${s.stepTitle}\n${s.items
+          .map((i) => `    - ${i.label}: ${i.value} (${i.isFactual ? 'fact' : 'estimate'})`)
+          .join('\n')}\n    ${s.calculation} → ${s.result}`
+    )
+    .join('\n');
+
+  return `QUESTION: ${question.title}
+ESTIMATING: ${question.answer?.label ?? ''} in ${question.answer?.unit ?? ''}
+YOUR ANSWER WAS: ${question.answer?.value ?? ''}
+YOUR WORKING:
+${steps}
+YOUR SANITY CHECK: ${question.sanityCheck}`;
+}
+
+/**
+ * Writer and critic go back and forth until the two independently agree, or
+ * until the round limit stops them.
+ *
+ * Bounded on purpose. The cron has a wall clock and each round is two model
+ * calls, so a model having a bad day must not become an unbounded argument.
+ * When the limit is hit we ship the closest version rather than nothing — a
+ * question the critic still doubts is far better than no questions at all — and
+ * its critique goes on the record, so a shipped-but-doubted question is visibly
+ * different in the admin view from one that was actually approved.
+ */
+async function reviewUntilConfident(
+  question: Guesstimate,
+  rounds = MAX_CRITIC_ATTEMPTS
+): Promise<ReviewedQuestion> {
+  const critiques: Critique[] = [];
+  let current = question;
+  let best: { question: Guesstimate; ratio: number } | null = null;
+
+  for (let round = 1; round <= Math.max(1, rounds); round += 1) {
+    const critique = await critiqueQuestion(current, round);
+    critiques.push(critique);
+
+    // 'skipped' means the critic itself could not run. Another round would just
+    // spend the budget on the same outage, so take what we have.
+    if (critique.verdict !== 'reject') return { question: current, critiques };
+
+    const ratio = critique.ratio ?? Infinity;
+    if (!best || ratio < best.ratio) best = { question: current, ratio };
+
+    if (round === Math.max(1, rounds)) break;
+
+    try {
+      current = await reviseSolution(current, critique);
+    } catch (error) {
+      // A failed rework is not a reason to lose the question — stop here and
+      // ship the closest version, with the objection recorded against it.
+      console.warn('critic: revision failed for', current.id, error);
+      break;
+    }
+  }
+
+  return { question: best?.question ?? current, critiques };
 }
 
 export async function generateReviewedPair(dateStr: string): Promise<{
@@ -323,29 +404,14 @@ export async function generateReviewedPair(dateStr: string): Promise<{
   critiques: Critique[];
 }> {
   const pair = await generateDailyPair(dateStr);
-  const allCritiques: Critique[] = [];
 
-  // Reviewed one at a time so a single bad question is replaced on its own
-  // rather than throwing away a good one alongside it.
-  const reviewed = await Promise.all(
-    pair.map(async (original) => {
-      const first = await critiqueQuestion(original, 1);
-      if (first.verdict !== 'reject') return { question: original, critiques: [first] };
+  // Reviewed independently so one question's argument doesn't hold up the other.
+  const reviewed = await Promise.all(pair.map((q) => reviewUntilConfident(q)));
 
-      const retried = await generateReviewed(
-        () =>
-          generateSingleQuestion({
-            region: original.region,
-            allowAdvanced: isAdvancedQuestionDay(dateStr),
-          }),
-        MAX_CRITIC_ATTEMPTS - 1
-      );
-      return { question: retried.question, critiques: [first, ...retried.critiques] };
-    })
-  );
-
-  for (const entry of reviewed) allCritiques.push(...entry.critiques);
-  return { pair: [reviewed[0].question, reviewed[1].question], critiques: allCritiques };
+  return {
+    pair: [reviewed[0].question, reviewed[1].question],
+    critiques: reviewed.flatMap((r) => r.critiques),
+  };
 }
 
 /** A single replacement question, reviewed the same way the daily pair is. */
@@ -354,13 +420,7 @@ export async function generateReviewedQuestion(options: {
   allowAdvanced?: boolean;
   adminBrief?: string;
 }): Promise<ReviewedQuestion> {
-  // An admin's own question is reviewed too, but never replaced — they asked
-  // for that case specifically, so the critique is advice, not a veto.
-  if (options.adminBrief) {
-    const question = await generateSingleQuestion(options);
-    return { question, critiques: [await critiqueQuestion(question, 1)] };
-  }
-  return generateReviewed(() => generateSingleQuestion(options));
+  return reviewUntilConfident(await generateSingleQuestion(options));
 }
 
 /** Persists a day's pair and makes each question individually resolvable. */

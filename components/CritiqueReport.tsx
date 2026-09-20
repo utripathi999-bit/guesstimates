@@ -105,31 +105,30 @@ export function CritiqueCard({ critique }: { critique: CritiqueView }) {
  * nobody objected to from one that passed because the critic was unavailable.
  * Pointing it at a question you already believe is wrong is the check.
  */
-export function CritiqueReport({ initial, questionIds }: { initial: CritiqueView[]; questionIds: string[] }) {
+export function CritiqueReport({ initial }: { initial: CritiqueView[] }) {
   const [critiques, setCritiques] = useState(initial);
-  const [runningId, setRunningId] = useState<string | null>(null);
-  const [manualId, setManualId] = useState('');
+  const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function run(questionId: string) {
-    setRunningId(questionId);
+  async function run() {
+    setRunning(true);
     setError(null);
     try {
       const res = await fetch('/api/admin/critique', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ questionId }),
+        body: '{}',
       });
       if (!res.ok) {
-        setError(await extractApiErrorMessage(res, 'Could not run the critic.'));
+        setError(await extractApiErrorMessage(res, 'Could not run the review.'));
         return;
       }
-      const data: { critique: CritiqueView } = await res.json();
-      setCritiques((prev) => [data.critique, ...prev.filter((c) => c.questionId !== data.critique.questionId)]);
+      const data: { critiques: CritiqueView[] } = await res.json();
+      setCritiques(data.critiques);
     } catch {
-      setError('Could not run the critic.');
+      setError('Could not run the review.');
     } finally {
-      setRunningId(null);
+      setRunning(false);
     }
   }
 
@@ -140,36 +139,16 @@ export function CritiqueReport({ initial, questionIds }: { initial: CritiqueView
         Question review
       </h2>
       <p className="mb-4 mt-1 text-sm text-text-muted">
-        Every generated question is re-derived independently before students see it. A question is rejected and
-        regenerated when the critic&apos;s own answer is more than 3× away, or when it finds a structural flaw.
+        Before students see a question, a reviewer works it independently. If its answer is more than 3× away, or
+        it finds a structural flaw, the solution is reworked and re-reviewed until the two agree.
       </p>
 
       {error && <div className="mb-3 rounded-xl bg-callout-danger px-3 py-2 text-sm text-callout-danger-text">{error}</div>}
 
-      <div className="mb-4 flex flex-wrap gap-2">
-        {questionIds.map((id) => (
-          <Button key={id} variant="neutral" size="sm" disabled={runningId !== null} onClick={() => run(id)}>
-            {runningId === id ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldQuestion className="h-4 w-4" />}
-            Re-check today&apos;s
-          </Button>
-        ))}
-      </div>
-
-      <div className="mb-4 flex flex-col gap-2 sm:flex-row">
-        <input
-          value={manualId}
-          onChange={(e) => setManualId(e.target.value)}
-          placeholder="Any question id, e.g. daily-ecommerce-parcels-delhi-ncr"
-          className="min-w-0 flex-1 rounded-xl bg-background px-3 py-2 text-sm text-foreground outline-none ring-1 ring-inset ring-surface-border focus:ring-2 focus:ring-action"
-        />
-        <Button
-          variant="action"
-          size="sm"
-          disabled={runningId !== null || manualId.trim().length === 0}
-          onClick={() => run(manualId.trim())}
-        >
-          {runningId === manualId.trim() ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          Run critic
+      <div className="mb-4">
+        <Button variant="neutral" size="sm" disabled={running} onClick={run}>
+          {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldQuestion className="h-4 w-4" />}
+          {running ? 'Reviewing…' : "Review today's questions again"}
         </Button>
       </div>
 

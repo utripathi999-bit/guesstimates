@@ -38,7 +38,7 @@ export default async function AdminPage() {
         date={daily.date}
       />
 
-      <CritiqueReport initial={critiques} questionIds={daily.questions.map((q) => q.id)} />
+      <CritiqueReport initial={critiques} />
 
       <h2 className="text-display text-2xl font-black text-foreground">Registered students</h2>
       <p className="mb-6 mt-1 text-text-muted">

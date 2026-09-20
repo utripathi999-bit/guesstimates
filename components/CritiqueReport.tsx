@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowDown, CheckCircle2, Loader2, MinusCircle, ShieldQue
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { extractApiErrorMessage } from '@/lib/apiError';
+import { useIsClient } from '@/lib/useIsClient';
 import { formatIndian } from '@/lib/estimateMath';
 
 export interface CritiqueView {
@@ -137,6 +138,9 @@ function QuestionLoop({ rounds }: { rounds: CritiqueView[] }) {
 export function CritiqueReport({ initial }: { initial: CritiqueView[] }) {
   const [critiques, setCritiques] = useState(initial);
   const [running, setRunning] = useState(false);
+  // See AdminQuestions: a pre-hydration click does nothing at all, which is
+  // worse than a disabled button because it looks like the action failed.
+  const ready = useIsClient();
   const [error, setError] = useState<string | null>(null);
 
   async function run() {
@@ -198,9 +202,13 @@ export function CritiqueReport({ initial }: { initial: CritiqueView[] }) {
       {error && <div className="mb-3 rounded-xl bg-callout-danger px-3 py-2 text-sm text-callout-danger-text">{error}</div>}
 
       <div className="mb-4">
-        <Button variant="neutral" size="sm" disabled={running} onClick={run}>
-          {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldQuestion className="h-4 w-4" />}
-          {running ? 'Reviewing…' : "Review today's questions again"}
+        <Button variant="neutral" size="sm" disabled={running || !ready} onClick={run}>
+          {running || !ready ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <ShieldQuestion className="h-4 w-4" />
+          )}
+          {!ready ? 'Loading…' : running ? 'Reviewing…' : "Review today's questions again"}
         </Button>
       </div>
 

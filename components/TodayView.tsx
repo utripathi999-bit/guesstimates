@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { CheckCircle2, Circle, Flame, Globe2, MapPin, Sparkles, Trophy } from 'lucide-react';
+import { CheckCircle2, Circle, Flame, Globe2, Info, MapPin, Sparkles, Trophy } from 'lucide-react';
 import Link from 'next/link';
 import { useMemo } from 'react';
 import { Badge } from '@/components/ui/Badge';
@@ -118,6 +118,26 @@ export function TodayView({ dailyPair, source }: TodayViewProps) {
       <div className="grid gap-4 sm:grid-cols-2">
         <QuestionCard guesstimate={dailyPair[0]} status={statuses[dailyPair[0].id] ?? 'Unsolved'} />
         <QuestionCard guesstimate={dailyPair[1]} status={statuses[dailyPair[1].id] ?? 'Unsolved'} />
+      </div>
+
+      {/* Kept permanently visible rather than a tooltip or a dismissible note:
+          it is the single most important thing to understand about practising
+          these, it has to survive being read once, and a hover tooltip would be
+          invisible to the students doing this on a phone. */}
+      <div className="shadow-card mt-8 flex gap-3 rounded-2xl bg-callout-info p-5 text-callout-info-text">
+        <Info className="mt-0.5 h-5 w-5 shrink-0" strokeWidth={2.5} />
+        <div className="text-sm leading-relaxed">
+          <p className="font-black">There is no single right answer to a guesstimate.</p>
+          <p className="mt-1">
+            An interviewer is watching how you break the problem down, which assumptions you make, and whether
+            you can defend them — not whether you landed on one particular number. So if your approach differs
+            from the worked solution, that is normal, and often perfectly sound. The solution shows{' '}
+            <em>one</em> defensible route, not the only one.
+          </p>
+          <p className="mt-1 font-bold">
+            What counts is that you structured it and reasoned it through. Keep at it.
+          </p>
+        </div>
       </div>
 
       {completedToday === 2 && (

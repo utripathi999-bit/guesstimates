@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { extractApiErrorMessage } from '@/lib/apiError';
+import { useIsClient } from '@/lib/useIsClient';
 
 export interface AdminQuestionSummary {
   id: string;
@@ -58,7 +59,11 @@ export function AdminQuestions({ initialQuestions, initialSource, date }: AdminQ
     }
   }
 
-  const disabled = busy !== null;
+  // Until React has hydrated, a click lands on markup with no handler attached
+  // and silently does nothing — which on a button that regenerates the whole
+  // batch reads as "it's broken", so the button says so instead.
+  const ready = useIsClient();
+  const disabled = busy !== null || !ready;
 
   return (
     <section className="mb-10">
@@ -70,8 +75,12 @@ export function AdminQuestions({ initialQuestions, initialSource, date }: AdminQ
           disabled={disabled}
           onClick={() => run({ action: 'regenerateAll' }, { kind: 'all' }, () => 'Generated a fresh pair for today.')}
         >
-          {busy?.kind === 'all' ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          Regenerate both
+          {busy?.kind === 'all' || !ready ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4" />
+          )}
+          {ready ? 'Regenerate both' : 'Loading…'}
         </Button>
       </div>
       <p className="mb-4 text-sm text-text-muted">

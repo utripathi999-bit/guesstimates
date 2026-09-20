@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getSessionAccountFromCookies, isOwner } from '@/lib/auth';
-import { critiqueQuestion, reviewQuestionPremise } from '@/lib/questionCritic';
-import { getDailyPair, getQuestionById } from '@/lib/questionStore';
+import { critiqueQuestion, reviewQuestionPremise, saveCritiques } from '@/lib/questionCritic';
+import { reworkLiveSolutions, saveDailyPair } from '@/lib/questionGenerator';
+import { getDailyPair, getQuestionById, getUtcDateString } from '@/lib/questionStore';
 
 export const dynamic = 'force-dynamic';
 // Four tool-using reviews, each of which may search and run code.
@@ -20,7 +21,16 @@ export const maxDuration = 300;
  * slug nobody should have to know. It stays for pointing the critic at an
  * archived question from a terminal when something needs investigating.
  */
-const RequestZ = z.object({ questionId: z.string().min(1).max(120).optional() });
+const RequestZ = z.object({
+  questionId: z.string().min(1).max(120).optional(),
+  /**
+   * Off by default. Reviewing is always safe to run; rewriting what students
+   * are currently looking at is not, so it has to be asked for explicitly.
+   * Even then it only ever touches solutions — the question, its id, its title
+   * and the unit students answer in are pinned by reworkLiveSolutions.
+   */
+  reworkSolutions: z.boolean().optional(),
+});
 
 function authorized(request: NextRequest, isOwnerSession: boolean): boolean {
   const header = request.headers.get('authorization');
@@ -56,6 +66,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unknown question' }, { status: 404 });
   }
 
+  if (validation.data.reworkSolutions) {
+    const { updated, critiques, changedIds } = await reworkLiveSolutions(questions);
+
+    // Only write back when a solution actually moved, and only for today's
+    // live pair — a targeted re-review of some archived question reports only.
+    if (changedIds.length > 0 && !requestedId) {
+      const today = getUtcDateString();
+      await saveDailyPair(today, updated);
+      await saveCritiques(today, critiques);
+    }
+
+    return NextResponse.json({ critiques, changedIds, reworked: true });
+  }
+
   // Both stages, matching what generation does and what the report shows — a
   // re-review that only checked the answer would silently skip the premise,
   // which is the half that catches a question nobody can picture.
@@ -68,5 +92,5 @@ export async function POST(request: NextRequest) {
     )
   ).flat();
 
-  return NextResponse.json({ critiques });
+  return NextResponse.json({ critiques, changedIds: [], reworked: false });
 }

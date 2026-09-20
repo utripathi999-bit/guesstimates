@@ -331,9 +331,55 @@ ${QUALITY_RULES}`;
     throw new Error(`Revised question failed schema validation: ${validation.error.issues[0]?.message}`);
   }
 
-  // Identity is ours, not the model's: the id keeps any committed estimates
-  // attached, and the title is what the student already read.
-  return { ...(validation.data as Guesstimate), id: question.id, title: question.title };
+  // Identity is ours, not the model's. The id keeps committed estimates
+  // attached, the title is what the student already read, and the answer's
+  // label and unit are what they typed a number against — if the unit moved
+  // from "₹ crore" to "₹", every estimate on record would silently become
+  // wrong by a factor of ten million. Only the value and the working may move.
+  const revised = validation.data as Guesstimate;
+  return {
+    ...revised,
+    id: question.id,
+    title: question.title,
+    answer: question.answer && revised.answer
+      ? { ...question.answer, value: revised.answer.value }
+      : revised.answer,
+  };
+}
+
+/**
+ * Reworks the solutions of questions that are already live, without touching
+ * the questions themselves.
+ *
+ * Generation may redraw a question whose premise is unsound, because at 05:30
+ * nothing is live and a bad case is best replaced outright. Once students are
+ * looking at it that trade flips: swapping the question out from under someone
+ * mid-solve costs them more than a doubtful premise does. So this path is
+ * solution-only by construction — the question, its id, its title and the unit
+ * students answer in are all pinned.
+ */
+export async function reworkLiveSolutions(questions: Guesstimate[]): Promise<{
+  updated: Guesstimate[];
+  critiques: Critique[];
+  changedIds: string[];
+}> {
+  const critiques: Critique[] = [];
+  const updated: Guesstimate[] = [];
+  const changedIds: string[] = [];
+
+  for (const question of questions) {
+    // The premise is reported on but never acted on here.
+    critiques.push(await reviewQuestionPremise(question, 1));
+
+    const reviewed = await reviewUntilConfident(question);
+    critiques.push(...reviewed.critiques);
+    updated.push(reviewed.question);
+
+    const answerMoved = reviewed.question.answer?.value !== question.answer?.value;
+    if (reviewed.question !== question && answerMoved) changedIds.push(question.id);
+  }
+
+  return { updated, critiques, changedIds };
 }
 
 function describeCaseForRevision(question: Guesstimate): string {

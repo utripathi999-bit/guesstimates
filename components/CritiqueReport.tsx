@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle, ArrowDown, CheckCircle2, Loader2, MinusCircle, ShieldQuestion } from 'lucide-react';
+import { AlertTriangle, ArrowDown, CheckCircle2, Loader2, MinusCircle, ShieldQuestion, Wrench } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { extractApiErrorMessage } from '@/lib/apiError';
@@ -150,31 +150,40 @@ function QuestionLoop({ rounds }: { rounds: CritiqueView[] }) {
  */
 export function CritiqueReport({ initial }: { initial: CritiqueView[] }) {
   const [critiques, setCritiques] = useState(initial);
-  const [running, setRunning] = useState(false);
+  const [running, setRunning] = useState<'review' | 'rework' | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   // See AdminQuestions: a pre-hydration click does nothing at all, which is
   // worse than a disabled button because it looks like the action failed.
   const ready = useIsClient();
   const [error, setError] = useState<string | null>(null);
 
-  async function run() {
-    setRunning(true);
+  async function run(reworkSolutions: boolean) {
+    setRunning(reworkSolutions ? 'rework' : 'review');
     setError(null);
+    setNotice(null);
     try {
       const res = await fetch('/api/admin/critique', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: '{}',
+        body: JSON.stringify({ reworkSolutions }),
       });
       if (!res.ok) {
         setError(await extractApiErrorMessage(res, 'Could not run the review.'));
         return;
       }
-      const data: { critiques: CritiqueView[] } = await res.json();
+      const data: { critiques: CritiqueView[]; changedIds: string[]; reworked: boolean } = await res.json();
       setCritiques(data.critiques);
+      if (data.reworked) {
+        setNotice(
+          data.changedIds.length === 0
+            ? 'Nothing needed reworking — every solution held up.'
+            : `Reworked ${data.changedIds.length} solution${data.changedIds.length === 1 ? '' : 's'}. The questions are unchanged.`
+        );
+      }
     } catch {
       setError('Could not run the review.');
     } finally {
-      setRunning(false);
+      setRunning(null);
     }
   }
 
@@ -213,17 +222,33 @@ export function CritiqueReport({ initial }: { initial: CritiqueView[] }) {
       </p>
 
       {error && <div className="mb-3 rounded-xl bg-callout-danger px-3 py-2 text-sm text-callout-danger-text">{error}</div>}
+      {notice && (
+        <div className="mb-3 rounded-xl bg-callout-success px-3 py-2 text-sm text-callout-success-text">{notice}</div>
+      )}
 
-      <div className="mb-4">
-        <Button variant="neutral" size="sm" disabled={running || !ready} onClick={run}>
-          {running || !ready ? (
+      <div className="mb-4 flex flex-wrap gap-2">
+        <Button variant="neutral" size="sm" disabled={running !== null || !ready} onClick={() => run(false)}>
+          {running === 'review' || !ready ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <ShieldQuestion className="h-4 w-4" />
           )}
-          {!ready ? 'Loading…' : running ? 'Reviewing…' : "Review today's questions again"}
+          {!ready ? 'Loading…' : running === 'review' ? 'Reviewing…' : 'Review only'}
+        </Button>
+
+        <Button variant="action" size="sm" disabled={running !== null || !ready} onClick={() => run(true)}>
+          {running === 'rework' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />}
+          {running === 'rework' ? 'Reworking…' : 'Rework flagged solutions'}
         </Button>
       </div>
+
+      {/* Stated rather than implied: this section can rewrite a solution, and
+          the one thing an admin needs to be sure of is that it will not swap a
+          question out from under a student mid-solve. */}
+      <p className="mb-4 text-xs font-bold text-text-muted">
+        Neither button changes a question. Reworking updates the working and the worked answer only — to
+        change a question, use Swap for another above.
+      </p>
 
       {grouped.size === 0 ? (
         <div className="shadow-card rounded-2xl bg-surface p-6 text-center text-sm text-text-muted">

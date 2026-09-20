@@ -68,6 +68,8 @@ export interface InterviewerCallResult {
   raw: string;
   /** Which model actually answered — logged so a silent fallback is still visible. */
   model: string;
+  /** False when tools were requested but the call had to fall back without them. */
+  usedTools?: boolean;
 }
 
 /**
@@ -78,7 +80,27 @@ export interface InterviewerCallResult {
  * ceiling can be spent before the JSON is closed. The prompts, not the ceiling,
  * are what keep these replies to a sentence or two.
  */
-export async function callInterviewerModel({
+export async function callInterviewerModel(
+  options: InterviewerCallOptions
+): Promise<InterviewerCallResult> {
+  try {
+    return await runChain(options);
+  } catch (error) {
+    // Tool-enabled calls can fail for reasons a plain call would not — search
+    // grounding and code execution carry their own quotas and availability, so
+    // "every model refused" may mean "the tools are unavailable" rather than
+    // "Gemini is full". A review without search is far weaker than one with it,
+    // but it is enormously better than no review, so degrade rather than skip.
+    if (error instanceof AllModelsBusyError && options.tools?.length) {
+      console.warn('tools unavailable, retrying review without them:', error.lastDetail);
+      const plain = await runChain({ ...options, tools: undefined });
+      return { ...plain, usedTools: false };
+    }
+    throw error;
+  }
+}
+
+async function runChain({
   systemInstruction,
   userMessage,
   responseSchema,
@@ -117,7 +139,7 @@ export async function callInterviewerModel({
           `Empty response from ${model} (finishReason: ${response.candidates?.[0]?.finishReason ?? 'unknown'})`
         );
       }
-      return { raw, model };
+      return { raw, model, usedTools: usingTools };
     } catch (error) {
       lastError = error;
       if (!isCapacityError(error)) throw error;

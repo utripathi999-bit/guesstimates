@@ -64,6 +64,8 @@ export interface Critique extends Partial<CritiqueBody> {
   attempt: number;
   /** Set when the critic could not run at all — the question passes by default. */
   skipReason?: string;
+  /** False when the reviewer had to work without search or code execution. */
+  usedTools?: boolean;
 }
 
 const critiqueResponseSchema = {
@@ -129,6 +131,17 @@ const QuestionReviewZ = z.object({
   concerns: z.array(z.string()).max(4),
   reasoning: z.string(),
 });
+
+const questionReviewResponseSchema = {
+  type: 'OBJECT',
+  properties: {
+    premiseSound: { type: 'BOOLEAN' },
+    answerable: { type: 'BOOLEAN' },
+    concerns: { type: 'ARRAY', items: { type: 'STRING' } },
+    reasoning: { type: 'STRING' },
+  },
+  required: ['premiseSound', 'answerable', 'concerns', 'reasoning'],
+};
 
 const QUESTION_REVIEW_INSTRUCTION = `You are a senior consulting interviewer deciding whether a guesstimate
 case is fit to put in front of Indian MBA candidates. You did not write it. You are judging the QUESTION
@@ -200,10 +213,10 @@ SCOPING QUESTIONS IT EXPECTS: ${question.clarifyingQuestions.join(' | ')}
 KEY ASSUMPTIONS IT RELIES ON: ${question.keyAssumptions.join(' | ')}`;
 
   try {
-    const { raw } = await callInterviewerModel({
+    const { raw, usedTools } = await callInterviewerModel({
       systemInstruction: QUESTION_REVIEW_INSTRUCTION,
       userMessage: brief,
-      responseSchema: {},
+      responseSchema: questionReviewResponseSchema,
       tools: [{ googleSearch: {} }],
       temperature: 0.2,
       maxOutputTokens: 4096,
@@ -221,12 +234,13 @@ KEY ASSUMPTIONS IT RELIES ON: ${question.keyAssumptions.join(' | ')}`;
       verdict: premiseSound && answerable ? 'accept' : 'reject',
       concerns,
       reasoning,
+      usedTools,
       method: premiseSound ? 'premise checked' : 'premise could not be confirmed',
     };
   } catch (error) {
     const skipReason =
       error instanceof AllModelsBusyError
-        ? 'Every model was at capacity — question premise passed unreviewed.'
+        ? `Reviewer unavailable, premise passed unreviewed — ${error.lastDetail}`
         : `Question reviewer failed: ${error instanceof Error ? error.message : String(error)}`;
     console.warn('question review skipped for', question.id, '—', skipReason);
     return { ...base, verdict: 'skipped', skipReason };
@@ -287,7 +301,7 @@ export async function critiqueQuestion(question: Guesstimate, attempt = 1): Prom
   }
 
   try {
-    const { raw } = await callInterviewerModel({
+    const { raw, usedTools } = await callInterviewerModel({
       systemInstruction: CRITIC_INSTRUCTION,
       userMessage: describeForCritic(question),
       // Unused while tools are on — the API won't enforce a schema alongside
@@ -310,11 +324,11 @@ export async function critiqueQuestion(question: Guesstimate, attempt = 1): Prom
     const ratio = ratioBetween(body.independentEstimate, question.answer.value);
     const verdict = body.fatalFlaw || ratio > ACCEPTABLE_RATIO ? 'reject' : 'accept';
 
-    return { ...base, ...body, ratio, verdict };
+    return { ...base, ...body, ratio, verdict, usedTools };
   } catch (error) {
     const skipReason =
       error instanceof AllModelsBusyError
-        ? 'Every model was at capacity — question passed unreviewed.'
+        ? `Reviewer unavailable, answer passed unreviewed — ${error.lastDetail}`
         : `Critic failed: ${error instanceof Error ? error.message : String(error)}`;
     console.warn('critic skipped for', question.id, '—', skipReason);
     return { ...base, verdict: 'skipped', ratio: null, skipReason };

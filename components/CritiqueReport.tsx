@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle, CheckCircle2, Loader2, MinusCircle, ShieldQuestion } from 'lucide-react';
+import { AlertTriangle, ArrowDown, CheckCircle2, Loader2, MinusCircle, ShieldQuestion } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { extractApiErrorMessage } from '@/lib/apiError';
@@ -22,88 +22,117 @@ export interface CritiqueView {
   checkedAt: string;
 }
 
-const VERDICT_STYLES = {
-  accept: { label: 'Accepted', className: 'bg-callout-success text-callout-success-text', Icon: CheckCircle2 },
-  reject: { label: 'Rejected', className: 'bg-callout-warn text-callout-warn-text', Icon: AlertTriangle },
-  skipped: { label: 'Not reviewed', className: 'bg-callout-info text-callout-info-text', Icon: MinusCircle },
+/** Above this the two answers are considered too far apart to ship. */
+const ACCEPTABLE_RATIO = 3;
+
+function formatRatio(ratio: number): string {
+  return ratio < 10 ? ratio.toFixed(1) : String(Math.round(ratio));
+}
+
+/**
+ * Why a round ended the way it did.
+ *
+ * Worth spelling out: a question can be rejected while the two answers are only
+ * 1.2x apart, because a structural flaw fails it regardless of how close the
+ * numbers are. Showing "Rejected · 1.2x apart" alone reads like a contradiction.
+ */
+function verdictLabel(c: CritiqueView): string {
+  if (c.verdict === 'skipped') return 'Not reviewed';
+  if (c.verdict === 'accept') return 'Agreed';
+  return c.ratio !== null && c.ratio > ACCEPTABLE_RATIO
+    ? `Rejected — ${formatRatio(c.ratio)}× apart`
+    : 'Rejected — flaw in the working';
+}
+
+const ROUND_STYLES = {
+  accept: 'bg-callout-success text-callout-success-text',
+  reject: 'bg-callout-warn text-callout-warn-text',
+  skipped: 'bg-callout-info text-callout-info-text',
 } as const;
 
-function Figure({ label, value, unit }: { label: string; value: number | null | undefined; unit?: string | null }) {
+const ROUND_ICONS = { accept: CheckCircle2, reject: AlertTriangle, skipped: MinusCircle } as const;
+
+function Round({ critique, index }: { critique: CritiqueView; index: number }) {
+  const Icon = ROUND_ICONS[critique.verdict];
+
   return (
-    <div className="min-w-0">
-      <p className="text-[0.65rem] font-black uppercase tracking-wider text-text-muted">{label}</p>
-      <p className="font-formula truncate text-sm font-black tabular-nums text-foreground">
-        {value === null || value === undefined ? '—' : formatIndian(value)}
-        {unit && value !== null && value !== undefined && (
-          <span className="ml-1 text-[0.65rem] font-bold text-text-muted">{unit}</span>
-        )}
+    <li className="relative pl-7">
+      <span
+        className={`absolute left-0 top-0.5 flex h-5 w-5 items-center justify-center rounded-full text-[0.6rem] font-black ${ROUND_STYLES[critique.verdict]}`}
+      >
+        {index + 1}
+      </span>
+
+      <p className={`flex flex-wrap items-center gap-1.5 text-sm font-black ${critique.verdict === 'reject' ? 'text-callout-warn-text' : 'text-foreground'}`}>
+        <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} />
+        {verdictLabel(critique)}
       </p>
-    </div>
+
+      {critique.skipReason ? (
+        <p className="mt-1 text-sm text-text-muted">{critique.skipReason}</p>
+      ) : (
+        <>
+          <p className="font-formula mt-1 text-xs text-text-muted">
+            writer <span className="font-black text-foreground">{formatIndian(critique.statedAnswer ?? NaN)}</span>
+            <span className="mx-1.5">vs</span>
+            reviewer <span className="font-black text-foreground">{formatIndian(critique.independentEstimate ?? NaN)}</span>
+            {critique.unit && <span className="ml-1">{critique.unit}</span>}
+          </p>
+
+          {critique.reasoning && <p className="mt-1.5 text-sm text-text-muted">{critique.reasoning}</p>}
+
+          {critique.concerns && critique.concerns.length > 0 && (
+            <ul className="mt-1.5 flex flex-col gap-1">
+              {critique.concerns.map((concern, i) => (
+                <li key={i} className="flex items-start gap-1.5 text-xs text-text-muted">
+                  <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" strokeWidth={2.5} />
+                  {concern}
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </li>
   );
 }
 
-export function CritiqueCard({ critique }: { critique: CritiqueView }) {
-  const style = VERDICT_STYLES[critique.verdict];
+/** One question and every round the writer and reviewer spent on it. */
+function QuestionLoop({ rounds }: { rounds: CritiqueView[] }) {
+  const final = rounds[rounds.length - 1];
+  const reworked = rounds.length > 1;
 
   return (
     <div className="shadow-card overflow-hidden rounded-2xl bg-surface">
-      <div className={`flex flex-wrap items-center gap-2 px-4 py-2.5 ${style.className}`}>
-        <style.Icon className="h-4 w-4 shrink-0" strokeWidth={2.5} />
-        <span className="text-sm font-black">{style.label}</span>
-        {critique.ratio !== null && (
-          <span className="rounded-full bg-black/10 px-2 py-0.5 text-xs font-black tabular-nums">
-            {critique.ratio < 10 ? critique.ratio.toFixed(1) : Math.round(critique.ratio)}× apart
-          </span>
-        )}
-        {critique.attempt > 1 && (
-          <span className="rounded-full bg-black/10 px-2 py-0.5 text-xs font-bold">attempt {critique.attempt}</span>
-        )}
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-surface-border px-4 py-3">
+        <p className="min-w-0 text-sm font-black text-foreground">{final.title}</p>
+        <p className="text-xs font-bold text-text-muted">
+          {reworked ? `reworked · settled in ${rounds.length} rounds` : 'agreed first time'}
+        </p>
       </div>
 
-      <div className="flex flex-col gap-3 p-4">
-        <p className="text-sm font-black leading-snug text-foreground">{critique.title}</p>
+      <ol className="flex flex-col gap-4 p-4">
+        {rounds.map((critique, i) => (
+          <Round key={`${critique.attempt}-${i}`} critique={critique} index={i} />
+        ))}
+      </ol>
 
-        {critique.skipReason ? (
-          <p className="text-sm text-text-muted">{critique.skipReason}</p>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 gap-3">
-              <Figure label="Question says" value={critique.statedAnswer} unit={critique.unit} />
-              <Figure label="Critic's own answer" value={critique.independentEstimate} unit={critique.unit} />
-            </div>
-
-            {critique.method && (
-              <p className="text-xs text-text-muted">
-                <span className="font-black uppercase tracking-wider">Its route:</span> {critique.method}
-              </p>
-            )}
-
-            {critique.reasoning && <p className="text-sm text-text-muted">{critique.reasoning}</p>}
-
-            {critique.concerns && critique.concerns.length > 0 && (
-              <ul className="flex flex-col gap-1.5">
-                {critique.concerns.map((concern, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-callout-warn-text">
-                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2.5} />
-                    {concern}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
-        )}
-      </div>
+      {reworked && (
+        <p className="flex items-center justify-center gap-1.5 border-t border-surface-border bg-background px-4 py-2 text-xs font-bold text-text-muted">
+          <ArrowDown className="h-3 w-3" strokeWidth={3} />
+          Students see the version from round {rounds.length}
+        </p>
+      )}
     </div>
   );
 }
 
 /**
- * The admin's view of what the critic did, plus a way to run it by hand.
+ * The admin's view of the writer/reviewer loop.
  *
- * The manual run matters more than it looks: during normal generation you only
- * ever see the question that survived, so there is no way to tell a question
- * nobody objected to from one that passed because the critic was unavailable.
- * Pointing it at a question you already believe is wrong is the check.
+ * Grouped by question rather than listed flat: the same case appearing twice
+ * with an "attempt 2" tag gave no sense that a rejection and a rework were the
+ * same conversation, which is the only thing this report is for.
  */
 export function CritiqueReport({ initial }: { initial: CritiqueView[] }) {
   const [critiques, setCritiques] = useState(initial);
@@ -132,6 +161,19 @@ export function CritiqueReport({ initial }: { initial: CritiqueView[] }) {
     }
   }
 
+  // Insertion order keeps the questions in the order they were generated; rounds
+  // within a question are ordered by the attempt that produced them.
+  const grouped = new Map<string, CritiqueView[]>();
+  for (const critique of critiques) {
+    const rounds = grouped.get(critique.questionId) ?? [];
+    rounds.push(critique);
+    grouped.set(critique.questionId, rounds);
+  }
+  for (const rounds of grouped.values()) rounds.sort((a, b) => a.attempt - b.attempt);
+
+  const totalRounds = critiques.length;
+  const reworkedCount = [...grouped.values()].filter((r) => r.length > 1).length;
+
   return (
     <section className="mb-10">
       <h2 className="text-display flex items-center gap-2 text-2xl font-black text-foreground">
@@ -139,8 +181,18 @@ export function CritiqueReport({ initial }: { initial: CritiqueView[] }) {
         Question review
       </h2>
       <p className="mb-4 mt-1 text-sm text-text-muted">
-        Before students see a question, a reviewer works it independently. If its answer is more than 3× away, or
-        it finds a structural flaw, the solution is reworked and re-reviewed until the two agree.
+        Before students see a question, a reviewer works it independently. If its answer is more than{' '}
+        {ACCEPTABLE_RATIO}× away, or it finds a flaw in the working, the solution is reworked and re-reviewed
+        until they agree.
+        {grouped.size > 0 && (
+          <>
+            {' '}
+            Today: <strong className="text-foreground">{totalRounds}</strong>{' '}
+            {totalRounds === 1 ? 'round' : 'rounds'} across {grouped.size}{' '}
+            {grouped.size === 1 ? 'question' : 'questions'}
+            {reworkedCount > 0 && `, ${reworkedCount} reworked`}.
+          </>
+        )}
       </p>
 
       {error && <div className="mb-3 rounded-xl bg-callout-danger px-3 py-2 text-sm text-callout-danger-text">{error}</div>}
@@ -152,14 +204,14 @@ export function CritiqueReport({ initial }: { initial: CritiqueView[] }) {
         </Button>
       </div>
 
-      {critiques.length === 0 ? (
+      {grouped.size === 0 ? (
         <div className="shadow-card rounded-2xl bg-surface p-6 text-center text-sm text-text-muted">
           No reviews recorded for today yet.
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {critiques.map((c, i) => (
-            <CritiqueCard key={`${c.questionId}-${c.attempt}-${i}`} critique={c} />
+          {[...grouped.entries()].map(([questionId, rounds]) => (
+            <QuestionLoop key={questionId} rounds={rounds} />
           ))}
         </div>
       )}

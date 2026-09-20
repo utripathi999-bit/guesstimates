@@ -299,8 +299,10 @@ async function generateReviewed(
 ): Promise<ReviewedQuestion> {
   const critiques: Critique[] = [];
   let best: { question: Guesstimate; ratio: number } | null = null;
+  // At least one attempt, always: a caller passing 0 must not mean "no question".
+  const attempts = Math.max(1, attemptsAllowed);
 
-  for (let attempt = 1; attempt <= attemptsAllowed; attempt += 1) {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const question = await make();
     const critique = await critiqueQuestion(question, attempt);
     critiques.push(critique);

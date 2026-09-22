@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Progress } from '@/components/ui/Progress';
 import { useProgress } from '@/components/ProgressProvider';
+import { useRefreshOnNewDay } from '@/lib/useRefreshOnNewDay';
 import type { Guesstimate, QuestionStatus } from '@/lib/types';
 
 const STATUS_META: Record<QuestionStatus, { icon: typeof Circle; className: string }> = {
@@ -57,10 +58,13 @@ interface TodayViewProps {
   dailyPair: [Guesstimate, Guesstimate];
   /** Whether today's pair was freshly generated or fell back to the seed set. */
   source: 'ai' | 'static';
+  /** The UTC day these questions belong to, so an open tab can tell when it has gone stale. */
+  date: string;
 }
 
-export function TodayView({ dailyPair, source }: TodayViewProps) {
+export function TodayView({ dailyPair, source, date }: TodayViewProps) {
   const { progress, statusOf } = useProgress();
+  useRefreshOnNewDay(date);
   const statuses = useMemo<Record<string, QuestionStatus>>(() => {
     const map: Record<string, QuestionStatus> = {};
     for (const g of dailyPair) map[g.id] = statusOf(g.id);

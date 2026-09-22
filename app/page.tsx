@@ -6,6 +6,6 @@ import { getDailyPair } from '@/lib/questionStore';
 export const dynamic = 'force-dynamic';
 
 export default async function HomePage() {
-  const { questions, source } = await getDailyPair();
-  return <TodayView dailyPair={questions} source={source} />;
+  const { questions, source, date } = await getDailyPair();
+  return <TodayView dailyPair={questions} source={source} date={date} />;
 }

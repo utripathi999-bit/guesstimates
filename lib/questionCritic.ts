@@ -128,6 +128,7 @@ OUTPUT: reply with ONLY a JSON object, no prose around it and no markdown fence:
 const QuestionReviewZ = z.object({
   premiseSound: z.boolean(),
   answerable: z.boolean(),
+  novel: z.boolean(),
   concerns: z.array(z.string()).max(4),
   reasoning: z.string(),
 });
@@ -137,10 +138,11 @@ const questionReviewResponseSchema = {
   properties: {
     premiseSound: { type: 'BOOLEAN' },
     answerable: { type: 'BOOLEAN' },
+    novel: { type: 'BOOLEAN' },
     concerns: { type: 'ARRAY', items: { type: 'STRING' } },
     reasoning: { type: 'STRING' },
   },
-  required: ['premiseSound', 'answerable', 'concerns', 'reasoning'],
+  required: ['premiseSound', 'answerable', 'novel', 'concerns', 'reasoning'],
 };
 
 const QUESTION_REVIEW_INSTRUCTION = `You are a senior consulting interviewer deciding whether a guesstimate
@@ -171,11 +173,20 @@ USE GOOGLE SEARCH. The most important thing you check cannot be done from memory
 4. IS THE TARGET UNAMBIGUOUS? The unit must settle money versus volume outright, and the scope (city,
    national, daily, annual) must be clear from the question itself.
 
+5. IS IT GENUINELY NEW? Compare it against the recent cases listed in the message. A case is a REPEAT if
+   it sizes the same kind of thing in the same kind of market, however it is worded. Judge the underlying
+   case, never the title's wording. The real example this check exists for: within three weeks the batch
+   got "Daily Revenue of a High-Volume South Indian QSR in Bengaluru", then "...Quick-Service South Indian
+   Restaurant in Chennai", then "...South Indian Filter Coffee Kiosk in Chennai", then a darshini. Those are
+   ONE case four times — a single South Indian eatery's daily revenue — and students saw it as the app
+   serving the same question again. Changing the city, the outlet's name, or "revenue" to "footfall" does
+   not make it new. If it is a repeat, novel is FALSE and say which recent case it duplicates.
+
 Be specific and concrete. "Could be clearer" is not a concern; "a candidate cannot tell whether this means
 the whole chain or one outlet" is.
 
 OUTPUT: reply with ONLY a JSON object, no prose around it and no markdown fence:
-{"premiseSound": <true|false>, "answerable": <true|false>, "concerns": ["<specific problem>"],
+{"premiseSound": <true|false>, "answerable": <true|false>, "novel": <true|false>, "concerns": ["<specific problem>"],
  "reasoning": "<2-3 sentences, naming what you searched for and found>"}`;
 
 /**
@@ -191,7 +202,11 @@ OUTPUT: reply with ONLY a JSON object, no prose around it and no markdown fence:
  * Never throws, for the same reason the solution reviewer doesn't: a review
  * step that can take generation down is worse than no review step.
  */
-export async function reviewQuestionPremise(question: Guesstimate, attempt = 1): Promise<Critique> {
+export async function reviewQuestionPremise(
+  question: Guesstimate,
+  attempt = 1,
+  recentTitles: string[] = []
+): Promise<Critique> {
   const base = {
     questionId: question.id,
     title: question.title,
@@ -203,6 +218,13 @@ export async function reviewQuestionPremise(question: Guesstimate, attempt = 1):
     attempt,
   };
 
+  // A live question is already in the archive; without this it would be judged
+  // a repeat of itself.
+  const recentList = recentTitles
+    .filter((t) => t !== question.title)
+    .map((t) => `- ${t}`)
+    .join('\n');
+
   const brief = `QUESTION: ${question.title}
 ASKS FOR: ${question.answer?.label ?? '(not specified)'}
 UNIT: ${question.answer?.unit ?? '(not specified)'}
@@ -210,7 +232,10 @@ REGION: ${question.region}
 DIFFICULTY: ${question.difficulty}
 CATEGORY: ${question.category}
 SCOPING QUESTIONS IT EXPECTS: ${question.clarifyingQuestions.join(' | ')}
-KEY ASSUMPTIONS IT RELIES ON: ${question.keyAssumptions.join(' | ')}`;
+KEY ASSUMPTIONS IT RELIES ON: ${question.keyAssumptions.join(' | ')}
+
+RECENT CASES STUDENTS HAVE ALREADY HAD (check novelty against these):
+${recentList || '(none on record — treat as novel)'}`;
 
   try {
     const { raw, usedTools } = await callInterviewerModel({
@@ -228,10 +253,10 @@ KEY ASSUMPTIONS IT RELIES ON: ${question.keyAssumptions.join(' | ')}`;
       return { ...base, verdict: 'skipped', skipReason: 'Question reviewer returned an unreadable verdict.' };
     }
 
-    const { premiseSound, answerable, concerns, reasoning } = parsed.data;
+    const { premiseSound, answerable, novel, concerns, reasoning } = parsed.data;
     return {
       ...base,
-      verdict: premiseSound && answerable ? 'accept' : 'reject',
+      verdict: premiseSound && answerable && novel ? 'accept' : 'reject',
       concerns,
       reasoning,
       usedTools,

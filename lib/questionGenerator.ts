@@ -194,7 +194,7 @@ markdown fences.`;
 }
 
 /** Recent titles, so generation doesn't slowly converge on the same handful of cases. */
-export async function getRecentTitles(limit = 20): Promise<string[]> {
+export async function getRecentTitles(limit = 60): Promise<string[]> {
   try {
     const recentRaw = await getRedis().lrange<string>(KEYS.archive, -limit, -1);
     return recentRaw
@@ -358,7 +358,7 @@ ${QUALITY_RULES}`;
  * solution-only by construction — the question, its id, its title and the unit
  * students answer in are all pinned.
  */
-export async function reworkLiveSolutions(questions: Guesstimate[]): Promise<{
+export async function reworkLiveSolutions(questions: Guesstimate[], recentTitles: string[] = []): Promise<{
   updated: Guesstimate[];
   critiques: Critique[];
   changedIds: string[];
@@ -369,7 +369,7 @@ export async function reworkLiveSolutions(questions: Guesstimate[]): Promise<{
 
   for (const question of questions) {
     // The premise is reported on but never acted on here.
-    critiques.push(await reviewQuestionPremise(question, 1));
+    critiques.push(await reviewQuestionPremise(question, 1, recentTitles));
 
     const reviewed = await reviewUntilConfident(question);
     critiques.push(...reviewed.critiques);
@@ -401,17 +401,6 @@ YOUR SANITY CHECK: ${question.sanityCheck}`;
 }
 
 /**
- * Writer and critic go back and forth until the two independently agree, or
- * until the round limit stops them.
- *
- * Bounded on purpose. The cron has a wall clock and each round is two model
- * calls, so a model having a bad day must not become an unbounded argument.
- * When the limit is hit we ship the closest version rather than nothing — a
- * question the critic still doubts is far better than no questions at all — and
- * its critique goes on the record, so a shipped-but-doubted question is visibly
- * different in the admin view from one that was actually approved.
- */
-/**
  * Two reviews, in order, because they fail for different reasons and are fixed
  * differently.
  *
@@ -423,13 +412,14 @@ YOUR SANITY CHECK: ${question.sanityCheck}`;
 async function reviewPremiseUntilSound(
   make: () => Promise<Guesstimate>,
   first: Guesstimate,
-  tries: number
+  tries: number,
+  recentTitles: string[]
 ): Promise<{ question: Guesstimate; critiques: Critique[] }> {
   const critiques: Critique[] = [];
   let current = first;
 
   for (let attempt = 1; attempt <= Math.max(1, tries); attempt += 1) {
-    const review = await reviewQuestionPremise(current, attempt);
+    const review = await reviewQuestionPremise(current, attempt, recentTitles);
     critiques.push(review);
     if (review.verdict !== 'reject') return { question: current, critiques };
     if (attempt === Math.max(1, tries)) break;
@@ -446,6 +436,17 @@ async function reviewPremiseUntilSound(
   return { question: current, critiques };
 }
 
+/**
+ * Writer and critic go back and forth until the two independently agree, or
+ * until the round limit stops them.
+ *
+ * Bounded on purpose. The cron has a wall clock and each round is two model
+ * calls, so a model having a bad day must not become an unbounded argument.
+ * When the limit is hit we ship the closest version rather than nothing — a
+ * question the critic still doubts is far better than no questions at all — and
+ * its critique goes on the record, so a shipped-but-doubted question is visibly
+ * different in the admin view from one that was actually approved.
+ */
 async function reviewUntilConfident(
   question: Guesstimate,
   rounds = MAX_CRITIC_ATTEMPTS
@@ -483,9 +484,10 @@ async function reviewUntilConfident(
 /** Premise review, then the answer argument, for one question. */
 async function fullyReview(
   question: Guesstimate,
-  redraw: () => Promise<Guesstimate>
+  redraw: () => Promise<Guesstimate>,
+  recentTitles: string[]
 ): Promise<ReviewedQuestion> {
-  const premise = await reviewPremiseUntilSound(redraw, question, PREMISE_ATTEMPTS);
+  const premise = await reviewPremiseUntilSound(redraw, question, PREMISE_ATTEMPTS, recentTitles);
   const solution = await reviewUntilConfident(premise.question);
   return {
     question: solution.question,
@@ -500,13 +502,17 @@ export async function generateReviewedPair(dateStr: string): Promise<{
   pair: [Guesstimate, Guesstimate];
   critiques: Critique[];
 }> {
-  const pair = await generateDailyPair(dateStr);
+  const [pair, recentTitles] = await Promise.all([generateDailyPair(dateStr), getRecentTitles()]);
 
-  // Reviewed independently so one question's argument doesn't hold up the other.
+  // Reviewed independently so one question's argument doesn't hold up the other
+  // — but each is told its partner's title. Run in parallel, neither would
+  // otherwise know the other exists, and a redraw could duplicate its own pair.
   const reviewed = await Promise.all(
-    pair.map((q) =>
-      fullyReview(q, () =>
-        generateSingleQuestion({ region: q.region, allowAdvanced: isAdvancedQuestionDay(dateStr) })
+    pair.map((q, i) =>
+      fullyReview(
+        q,
+        () => generateSingleQuestion({ region: q.region, allowAdvanced: isAdvancedQuestionDay(dateStr) }),
+        [...recentTitles, pair[1 - i].title]
       )
     )
   );
@@ -522,18 +528,24 @@ export async function generateReviewedQuestion(options: {
   region?: 'India' | 'Global';
   allowAdvanced?: boolean;
   adminBrief?: string;
+  /** Titles live alongside this one — a swap must not duplicate the question it sits next to. */
+  otherTitles?: string[];
 }): Promise<ReviewedQuestion> {
-  const question = await generateSingleQuestion(options);
+  const [question, recentTitles] = await Promise.all([
+    generateSingleQuestion(options),
+    getRecentTitles(),
+  ]);
+  const compareAgainst = [...recentTitles, ...(options.otherTitles ?? [])];
 
   // An admin's own question is reviewed but never redrawn — they asked for that
-  // case specifically, so a premise objection is advice, not a veto.
+  // case specifically, so a premise or novelty objection is advice, not a veto.
   if (options.adminBrief) {
-    const premise = await reviewQuestionPremise(question, 1);
+    const premise = await reviewQuestionPremise(question, 1, compareAgainst);
     const solution = await reviewUntilConfident(question);
     return { question: solution.question, critiques: [premise, ...solution.critiques] };
   }
 
-  return fullyReview(question, () => generateSingleQuestion(options));
+  return fullyReview(question, () => generateSingleQuestion(options), compareAgainst);
 }
 
 /** Persists a day's pair and makes each question individually resolvable. */

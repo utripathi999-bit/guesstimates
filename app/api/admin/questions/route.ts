@@ -101,13 +101,17 @@ export async function POST(request: NextRequest) {
     }
 
     const replaced = current.questions[index];
+    // The one it will sit beside, plus the one being thrown out: a swap that
+    // hands back a reworded copy of what the admin just rejected is no swap.
+    const otherTitles = current.questions.map((q) => q.title);
     const reviewed =
       command.action === 'replaceWithBrief'
-        ? await generateReviewedQuestion({ adminBrief: command.brief })
+        ? await generateReviewedQuestion({ adminBrief: command.brief, otherTitles })
         : await generateReviewedQuestion({
             // Keep the day's region mix intact when swapping a question out.
             region: replaced.region,
             allowAdvanced: isAdvancedQuestionDay(today),
+            otherTitles,
           });
 
     const nextPair = [...current.questions];

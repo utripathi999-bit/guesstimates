@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getSessionAccountFromCookies, isOwner } from '@/lib/auth';
 import { critiqueQuestion, reviewQuestionPremise, saveCritiques } from '@/lib/questionCritic';
-import { reworkLiveSolutions, saveDailyPair } from '@/lib/questionGenerator';
+import { getRecentTitles, reworkLiveSolutions, saveDailyPair } from '@/lib/questionGenerator';
 import { getDailyPair, getQuestionById, getUtcDateString } from '@/lib/questionStore';
 
 export const dynamic = 'force-dynamic';
@@ -66,8 +66,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unknown question' }, { status: 404 });
   }
 
+  const recentTitles = await getRecentTitles();
+
   if (validation.data.reworkSolutions) {
-    const { updated, critiques, changedIds } = await reworkLiveSolutions(questions);
+    const { updated, critiques, changedIds } = await reworkLiveSolutions(questions, recentTitles);
 
     // Only write back when a solution actually moved, and only for today's
     // live pair — a targeted re-review of some archived question reports only.
@@ -88,7 +90,7 @@ export async function POST(request: NextRequest) {
   // saying a reviewer could not run is more useful than a 500.
   const critiques = (
     await Promise.all(
-      questions.map(async (q) => [await reviewQuestionPremise(q, 1), await critiqueQuestion(q, 1)])
+      questions.map(async (q) => [await reviewQuestionPremise(q, 1, recentTitles), await critiqueQuestion(q, 1)])
     )
   ).flat();
 

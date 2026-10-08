@@ -8,7 +8,10 @@ import type { Guesstimate } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 // Room to walk the fallback chain when the first models are at capacity.
-export const maxDuration = 30;
+// Measured: a feedback call reached 22s against the old 30s ceiling, so a
+// single fallthrough blew the budget and the student saw a timeout. The chain
+// is now bounded to finish well inside this.
+export const maxDuration = 60;
 
 const ClarifyRequestZ = z.object({
   guesstimateId: z.string().min(1).max(120),
@@ -103,6 +106,10 @@ export async function POST(request: NextRequest) {
         required: ['answer'],
       },
       temperature: 0.6,
+      // Three attempts fit inside maxDuration with room to send the reply; a
+      // fourth would not, so the chain stops rather than losing the answer.
+      attemptTimeoutMs: 15_000,
+      totalBudgetMs: 40_000,
     });
 
     // A truncated reply and a dead API are different failures and must not look

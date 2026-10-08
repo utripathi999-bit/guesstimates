@@ -62,6 +62,29 @@ export interface InterviewerCallOptions {
    * ask for JSON in the prompt and parse it defensively — see parseLooseJson.
    */
   tools?: { googleSearch?: object; codeExecution?: object }[];
+  /**
+   * Give up on one model after this long and try the next.
+   *
+   * A model that hasn't answered yet is, for our purposes, unavailable — and on
+   * a request a student is waiting through, a slow first model is worse than a
+   * refusing one, because the refusal at least moves the chain along. Without a
+   * cap, one sluggish attempt can eat the whole function budget and the student
+   * gets a timeout instead of an answer.
+   */
+  attemptTimeoutMs?: number;
+  /**
+   * Stop starting new attempts once this much time has gone. Keeps the chain
+   * from running past the platform's own limit, where the reply is lost anyway.
+   */
+  totalBudgetMs?: number;
+}
+
+/** A model that ran out of time. Treated exactly like a model that said it was busy. */
+class ModelTimeoutError extends Error {
+  constructor(model: string, ms: number) {
+    super(`${model} did not answer within ${ms}ms`);
+    this.name = 'ModelTimeoutError';
+  }
 }
 
 export interface InterviewerCallResult {
@@ -107,17 +130,30 @@ async function runChain({
   temperature,
   maxOutputTokens = 2048,
   tools,
+  attemptTimeoutMs,
+  totalBudgetMs,
 }: InterviewerCallOptions): Promise<InterviewerCallResult> {
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   const usingTools = Boolean(tools?.length);
+  const startedAt = Date.now();
   let lastError: unknown;
 
   for (const model of MODEL_CHAIN) {
+    // Starting an attempt we haven't time to finish just loses the reply.
+    if (totalBudgetMs && Date.now() - startedAt > totalBudgetMs) {
+      console.warn(`out of time after ${Date.now() - startedAt}ms, not trying ${model}`);
+      break;
+    }
+
+    const abort = attemptTimeoutMs ? new AbortController() : undefined;
+    const timer = abort ? setTimeout(() => abort.abort(), attemptTimeoutMs) : undefined;
+
     try {
       const response = await ai.models.generateContent({
         model,
         contents: [{ role: 'user', parts: [{ text: userMessage }] }],
         config: {
+          abortSignal: abort?.signal,
           systemInstruction,
           // Schema-constrained output and tool use cannot both be on, so a
           // tool-using call asks for JSON in its prompt instead.
@@ -141,9 +177,16 @@ async function runChain({
       }
       return { raw, model, usedTools: usingTools };
     } catch (error) {
-      lastError = error;
-      if (!isCapacityError(error)) throw error;
-      console.warn(`${model} unavailable, falling through:`, error instanceof Error ? error.message : error);
+      // An aborted attempt is a timeout, not a fault in the request.
+      const timedOut = abort?.signal.aborted === true;
+      lastError = timedOut ? new ModelTimeoutError(model, attemptTimeoutMs ?? 0) : error;
+      if (!timedOut && !isCapacityError(error)) throw error;
+      console.warn(
+        `${model} ${timedOut ? 'timed out' : 'unavailable'}, falling through:`,
+        lastError instanceof Error ? lastError.message : lastError
+      );
+    } finally {
+      if (timer) clearTimeout(timer);
     }
   }
 

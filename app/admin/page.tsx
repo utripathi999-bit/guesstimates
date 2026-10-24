@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { AdminQuestions } from '@/components/AdminQuestions';
 import { AdminUsersList } from '@/components/AdminUsersList';
 import { CritiqueReport, type CritiqueView } from '@/components/CritiqueReport';
-import { getSessionAccountFromCookies, isOwner, listAllAccounts } from '@/lib/auth';
+import { getAccountCount, getSessionAccountFromCookies, isOwner, listAllAccounts, MAX_ACCOUNTS } from '@/lib/auth';
 import { getCritiques } from '@/lib/questionCritic';
 import { getDailyPair } from '@/lib/questionStore';
 
@@ -17,6 +17,7 @@ export default async function AdminPage() {
 
   const [accounts, daily] = await Promise.all([listAllAccounts(), getDailyPair()]);
   const critiques = (await getCritiques(daily.date)) as unknown as CritiqueView[];
+  const used = await getAccountCount();
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-10">
@@ -42,7 +43,7 @@ export default async function AdminPage() {
 
       <h2 className="text-display text-2xl font-black text-foreground">Registered students</h2>
       <p className="mb-6 mt-1 text-text-muted">
-        {accounts.length} {accounts.length === 1 ? 'account' : 'accounts'}. Emails are visible only to you — never
+        {used} of {MAX_ACCOUNTS} places taken. Emails are visible only to you — never
         shown to students anywhere in the app. Click the pencil to correct a name.
       </p>
 

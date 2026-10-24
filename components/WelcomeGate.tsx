@@ -8,6 +8,15 @@ import { Button } from '@/components/ui/Button';
 
 type Mode = 'login' | 'signup';
 
+/** Reasons the Google round trip can come back without a session. */
+const OAUTH_ERRORS: Record<string, string> = {
+  google_cancelled: 'Google sign-in was cancelled.',
+  google_unavailable: 'Google sign-in is not set up yet — use an email and password for now.',
+  google_unverified: "That Google account's email isn't verified, so it can't be used to sign in.",
+  google_failed: "Google sign-in didn't complete. Please try again.",
+  full: 'GuessMates is full right now — every place is taken.',
+};
+
 const SELLING_POINTS = [
   { icon: MessagesSquare, text: 'Ask a real interviewer clarifying questions before you start' },
   { icon: Lightbulb, text: 'Get nudged when stuck, and critiqued on what you actually wrote' },
@@ -25,6 +34,14 @@ export function WelcomeGate() {
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // The Google flow is a full page redirect, so anything that went wrong comes
+  // back as a query parameter rather than through the form's own state.
+  const oauthError = OAUTH_ERRORS[searchParams.get('error') ?? ''] ?? null;
+  const shownError = error ?? oauthError;
+
+  const next = searchParams.get('next');
+  const googleHref = `/api/auth/google/start${next && next.startsWith('/') ? `?next=${encodeURIComponent(next)}` : ''}`;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -80,6 +97,27 @@ export function WelcomeGate() {
           {mode === 'login' ? 'Sign in to pick up your streak.' : 'Use your real first name — your batch sees it on the leaderboard.'}
         </p>
 
+        {/* A plain link, not a fetch: the flow is a redirect to Google and back,
+            so there is nothing for client JavaScript to do or get wrong. */}
+        <a
+          href={googleHref}
+          className="mt-5 flex w-full items-center justify-center gap-2.5 rounded-2xl border-b-4 border-surface-border bg-surface px-6 py-3 text-base font-extrabold uppercase tracking-wide text-foreground transition-all duration-150 hover:-translate-y-0.5 active:translate-y-1 active:border-b-0"
+        >
+          <svg aria-hidden="true" viewBox="0 0 18 18" className="h-5 w-5">
+            <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62Z" />
+            <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18Z" />
+            <path fill="#FBBC05" d="M3.97 10.72a5.4 5.4 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.01-2.33Z" />
+            <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58Z" />
+          </svg>
+          Continue with Google
+        </a>
+
+        <div className="my-5 flex items-center gap-3 text-xs font-bold uppercase tracking-wider text-text-muted">
+          <span className="h-px flex-1 bg-surface-border" />
+          or use an email
+          <span className="h-px flex-1 bg-surface-border" />
+        </div>
+
         <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-3">
           {mode === 'signup' && (
             <div className="relative">
@@ -125,7 +163,9 @@ export function WelcomeGate() {
           </div>
           {mode === 'signup' && <p className="-mt-1 text-xs text-text-muted">Password must be at least 8 characters.</p>}
 
-          {error && <div className="rounded-xl bg-callout-danger px-3 py-2 text-sm text-callout-danger-text">{error}</div>}
+          {shownError && (
+            <div className="rounded-xl bg-callout-danger px-3 py-2 text-sm text-callout-danger-text">{shownError}</div>
+          )}
 
           <Button type="submit" variant="primary" size="md" disabled={submitting} className="mt-1 w-full">
             {submitting && <Loader2 className="h-4 w-4 animate-spin" />}

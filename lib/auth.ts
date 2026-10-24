@@ -47,7 +47,10 @@ export async function getAccountByEmail(
   normalizedEmail: string
 ): Promise<(Account & { passwordHash: string }) | null> {
   const raw = await getRedis().hgetall<Record<string, unknown>>(KEYS.account(normalizedEmail));
-  if (!raw || !raw.passwordHash) return null;
+  // Keyed on email, not on the password hash: an account created through Google
+  // has no hash, and treating that as "no account" would make the whole app
+  // fail to find a perfectly valid user.
+  if (!raw || !raw.email) return null;
   return {
     email: asString(raw.email),
     displayName: asString(raw.displayName),
@@ -56,15 +59,77 @@ export async function getAccountByEmail(
   };
 }
 
-export async function createAccount(email: string, password: string, displayName: string): Promise<Account> {
+/**
+ * Accounts are capped so a public link can't run the bills past what this is
+ * worth. 100 is the batch plus room for the people they share it with; the
+ * binding constraints behind it are the Gemini and Redis free tiers.
+ */
+export const MAX_ACCOUNTS = 100;
+
+/** How many accounts exist, for the signup cap and the admin view. */
+export async function getAccountCount(): Promise<number> {
+  if (!isRedisConfigured()) return 0;
+  const redis = getRedis();
+  const current = await redis.get<number>(KEYS.accountCount);
+  if (current !== null && current !== undefined) return Number(current) || 0;
+
+  // First read since the counter was introduced — seed it from the accounts
+  // that already exist. NX so two simultaneous signups can't both seed it.
+  const existing = (await listAllAccounts()).length;
+  await redis.set(KEYS.accountCount, existing, { nx: true });
+  return Number(await redis.get<number>(KEYS.accountCount)) || existing;
+}
+
+/**
+ * Claims one of the available places, or returns false when full.
+ *
+ * Increment-then-check rather than check-then-increment: two signups arriving
+ * together would both pass a check, and the cap would quietly be 101. INCR is
+ * atomic, so the loser of that race sees the over-limit value and gives its
+ * place back.
+ */
+export async function reserveAccountSlot(): Promise<boolean> {
+  if (!isRedisConfigured()) return true;
+  await getAccountCount();
+
+  const next = await getRedis().incr(KEYS.accountCount);
+  if (next > MAX_ACCOUNTS) {
+    await getRedis().decr(KEYS.accountCount);
+    return false;
+  }
+  return true;
+}
+
+/** Hands a reserved place back when the signup it was claimed for then failed. */
+export async function releaseAccountSlot(): Promise<void> {
+  if (!isRedisConfigured()) return;
+  try {
+    await getRedis().decr(KEYS.accountCount);
+  } catch (error) {
+    console.error('auth: could not release account slot', error);
+  }
+}
+
+/**
+ * Creates an account. `password` is null for Google sign-in, which leaves the
+ * hash empty — the login route refuses those explicitly rather than relying on
+ * a bcrypt comparison against an empty string happening to fail.
+ */
+export async function createAccount(
+  email: string,
+  password: string | null,
+  displayName: string,
+  provider: 'password' | 'google' = 'password'
+): Promise<Account> {
   const normalizedEmail = normalizeEmail(email);
-  const passwordHash = await hashPassword(password);
+  const passwordHash = password === null ? '' : await hashPassword(password);
   const createdAt = new Date().toISOString();
 
   await getRedis().hset(KEYS.account(normalizedEmail), {
     email: normalizedEmail,
     displayName,
     passwordHash,
+    provider,
     createdAt,
   });
 
@@ -167,6 +232,8 @@ export async function deleteAccount(normalizedEmail: string): Promise<void> {
   pipeline.del(KEYS.userProgress(normalizedEmail));
   pipeline.del(KEYS.userStreak(normalizedEmail));
   pipeline.zrem(KEYS.leaderboardStreaks, normalizedEmail);
+  // Give the place back, or deleting accounts would slowly use up the cap.
+  pipeline.decr(KEYS.accountCount);
   await pipeline.exec();
 }
 

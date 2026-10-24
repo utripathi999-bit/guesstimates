@@ -74,6 +74,12 @@ export const KEYS = {
   /** Hash of one account's auth + profile data, keyed by normalized (lowercased) email. */
   account: (normalizedEmail: string): string => `auth:account:${normalizedEmail}`,
 
+  /**
+   * How many accounts exist, kept as a counter so the signup cap is one atomic
+   * INCR rather than a scan of every account key on every signup.
+   */
+  accountCount: 'stats:accountCount' as const,
+
   /** String value (the account's normalized email) for a live session token. */
   session: (token: string): string => `auth:session:${token}`,
 } as const;

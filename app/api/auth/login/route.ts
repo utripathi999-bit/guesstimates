@@ -26,6 +26,16 @@ export async function POST(request: NextRequest) {
 
   try {
     const account = await getAccountByEmail(normalizedEmail);
+
+    if (account && !account.passwordHash) {
+      // Not a generic error: they have an account and guessing at passwords
+      // will never work, so say which door to use.
+      return NextResponse.json(
+        { error: 'This account uses Google sign-in — use the Continue with Google button.' },
+        { status: 409 }
+      );
+    }
+
     const passwordOk = account ? await verifyPassword(validation.data.password, account.passwordHash) : false;
 
     if (!account || !passwordOk) {

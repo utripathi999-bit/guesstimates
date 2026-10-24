@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createAccount, createSession, getAccountByEmail, normalizeEmail, SESSION_COOKIE_NAME, SESSION_MAX_AGE_SECONDS } from '@/lib/auth';
+import {
+  createAccount,
+  createSession,
+  getAccountByEmail,
+  MAX_ACCOUNTS,
+  normalizeEmail,
+  releaseAccountSlot,
+  reserveAccountSlot,
+  SESSION_COOKIE_NAME,
+  SESSION_MAX_AGE_SECONDS,
+} from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,7 +42,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'An account with this email already exists' }, { status: 409 });
     }
 
-    const account = await createAccount(normalizedEmail, password, displayName);
+    if (!(await reserveAccountSlot())) {
+      return NextResponse.json(
+        { error: `GuessMates is full — all ${MAX_ACCOUNTS} places are taken.` },
+        { status: 403 }
+      );
+    }
+
+    let account;
+    try {
+      account = await createAccount(normalizedEmail, password, displayName);
+    } catch (error) {
+      // Don't let a failed write burn a place.
+      await releaseAccountSlot();
+      throw error;
+    }
+
     const token = await createSession(normalizedEmail);
 
     const response = NextResponse.json({ account: { email: account.email, displayName: account.displayName } });

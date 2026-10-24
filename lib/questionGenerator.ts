@@ -131,7 +131,10 @@ ${GLOBAL_CONSTRAINT}`
     : `Produce exactly 2 brand-new cases, BOTH with region "India" — real Indian context (specific cities,
 actual consumer behaviour, real market structure). Not generic cases with Indian nouns swapped in.
 Make the two genuinely different from each other: different category, different approach, and a
-different part of the economy — not two variations on the same market.`;
+different part of the economy — not two variations on the same market.
+NOT THE SAME SUBJECT AT TWO ZOOM LEVELS. One case about a product nationally and another about the same
+product in one city is one case twice — same chain, same assumptions, one extra division — and it reads to
+a student as the app repeating itself. Different subject entirely, not a different scope on one subject.`;
 
   return `${INTERVIEWER_IDENTITY}
 
@@ -495,8 +498,16 @@ async function fullyReview(
   };
 }
 
-/** Redrawing the premise is bounded tighter than reworking a solution: it is a whole new question each time. */
-const PREMISE_ATTEMPTS = 2;
+/**
+ * Redraws allowed when a premise is rejected.
+ *
+ * Was 2, which proved too few: on 25 September the writer produced a repeat,
+ * the redraw was *also* flagged as a repeat, the budget ran out and the flagged
+ * question shipped. Each redraw is a whole question rather than a revision, so
+ * this stays tighter than the solution-rework budget, but it needs room for the
+ * writer to miss twice.
+ */
+const PREMISE_ATTEMPTS = 4;
 
 export async function generateReviewedPair(dateStr: string): Promise<{
   pair: [Guesstimate, Guesstimate];

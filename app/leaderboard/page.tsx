@@ -1,25 +1,31 @@
 import { Settings } from 'lucide-react';
 import { LeaderboardBoards } from '@/components/LeaderboardBoards';
-import { getFullLeaderboard, getWeeklyLeaderboard } from '@/lib/leaderboard';
+import { getSessionAccountFromCookies } from '@/lib/auth';
+import { BOARD_SIZE, getAllTimeBoard, getWeeklyBoard } from '@/lib/leaderboard';
 import { isRedisConfigured } from '@/lib/redis';
 import { describeTimeLeft } from '@/lib/week';
 
 export const dynamic = 'force-dynamic';
 
+const EMPTY = { top: [], you: null, youAreUnranked: false, total: 0 };
+
 export default async function LeaderboardPage() {
   const redisReady = isRedisConfigured();
+
+  // The viewer's own email never reaches the browser — it is used only to find
+  // their rank and to mark their row.
+  const account = redisReady ? await getSessionAccountFromCookies() : null;
+  const viewer = account?.email ?? null;
+
   const [allTime, weekly] = redisReady
-    ? await Promise.all([getFullLeaderboard(), getWeeklyLeaderboard()])
-    : [[], { entries: [], weekStart: '', resetAt: new Date().toISOString() }];
+    ? await Promise.all([getAllTimeBoard(viewer), getWeeklyBoard(viewer)])
+    : [EMPTY, { ...EMPTY, weekStart: '', resetAt: new Date().toISOString() }];
 
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-10">
       <div className="mb-6 text-center">
         <p className="text-xs font-black uppercase tracking-wider text-accent-dark">The Batch</p>
         <h1 className="text-display text-3xl font-black text-foreground">Leaderboard</h1>
-        <p className="mt-1 text-text-muted">
-          {allTime.length} {allTime.length === 1 ? 'student' : 'students'} signed up.
-        </p>
       </div>
 
       {!redisReady ? (
@@ -33,8 +39,9 @@ export default async function LeaderboardPage() {
         </div>
       ) : (
         <LeaderboardBoards
-          weekly={weekly.entries}
+          weekly={weekly}
           allTime={allTime}
+          boardSize={BOARD_SIZE}
           // Rendered server-side and passed down, so the client never recomputes
           // "now" and disagrees with the server during hydration.
           timeLeft={describeTimeLeft(new Date(weekly.resetAt))}

@@ -181,6 +181,11 @@ USE GOOGLE SEARCH. The most important thing you check cannot be done from memory
    ONE case four times — a single South Indian eatery's daily revenue — and students saw it as the app
    serving the same question again. Changing the city, the outlet's name, or "revenue" to "footfall" does
    not make it new. If it is a repeat, novel is FALSE and say which recent case it duplicates.
+   CHANGING THE GEOGRAPHIC SCOPE IS NOT A NEW CASE EITHER. "Annual market size of X in India" and "annual
+   market size of X in Mumbai" are the same case at two zoom levels: same subject, same chain, same
+   assumptions, one extra division. A student who has done one has done the other. The same goes for
+   national versus city, city versus single outlet, and annual versus daily on the same subject. Treat any
+   of those against a recent case, or against the other case in today's pair, as a repeat.
 
 Be specific and concrete. "Could be clearer" is not a concern; "a candidate cannot tell whether this means
 the whole chain or one outlet" is.

@@ -1,138 +1,163 @@
-import { listAllAccounts } from '@/lib/auth';
+import { getAccountByEmail } from '@/lib/auth';
 import { getProgress } from '@/lib/progress';
 import { getRedis, isRedisConfigured, KEYS } from '@/lib/redis';
 import { getUtcDateString } from '@/lib/questionStore';
 import { getWeekResetAt, getWeekStart } from '@/lib/week';
 
-export interface LeaderboardEntry {
+/**
+ * Leaderboards, read from the sorted sets rather than from the account list.
+ *
+ * The previous version listed every account and then read every account's
+ * progress — twice per page view, once per board. That is fine for one batch
+ * and ruinous beyond it: at 500 students a single view cost roughly two
+ * thousand Redis commands, against a free-tier allowance of 500,000 a month.
+ * Reading the top of a sorted set instead costs the same whether there are
+ * fifty people or fifty thousand.
+ *
+ * The visible change that makes this possible is showing a top 20 and the
+ * viewer's own rank, rather than listing everyone — which is also what a
+ * leaderboard should do once it stops being one classroom.
+ */
+
+/** How many places are listed before the viewer's own row. */
+export const BOARD_SIZE = 20;
+
+export interface BoardEntry {
+  rank: number;
   displayName: string;
   points: number;
   streak: number;
-  /** True when they haven't scored yet — the board still lists them. */
-  isZero: boolean;
+  isYou: boolean;
 }
 
-export interface WeeklyBoard {
-  entries: LeaderboardEntry[];
-  /** The Sunday this week's board opened, YYYY-MM-DD. */
+export interface Board {
+  top: BoardEntry[];
+  /**
+   * The viewer's own row, when they aren't already in the top. Null when they
+   * are in the list above, or have no points yet and so no rank at all.
+   */
+  you: BoardEntry | null;
+  /** Whether the viewer has scored but sits outside the top. */
+  youAreUnranked: boolean;
+  /** How many people have scored on this board. */
+  total: number;
+}
+
+export interface WeeklyBoard extends Board {
   weekStart: string;
-  /** When it wipes and everyone starts level again. */
   resetAt: string;
 }
 
 export async function removeUserFromLeaderboard(normalizedEmail: string): Promise<void> {
   const pipeline = getRedis().pipeline();
   pipeline.zrem(KEYS.leaderboardStreaks, normalizedEmail);
+  // The current week too, or a removed account keeps its place there until Sunday.
+  pipeline.zrem(KEYS.leaderboardWeekly(getWeekStart(getUtcDateString())), normalizedEmail);
   pipeline.del(KEYS.userStreak(normalizedEmail));
   await pipeline.exec();
 }
 
+/** Upstash returns withScores as a flat [member, score, member, score, …]. */
+function pairUp(flat: (string | number)[]): { email: string; score: number }[] {
+  return Array.from({ length: Math.floor(flat.length / 2) }, (_, i) => ({
+    email: String(flat[i * 2]),
+    score: Number(flat[i * 2 + 1]) || 0,
+  }));
+}
+
 /**
- * Lifetime points and the *live* streak for one account.
+ * Name and live streak for one person on the board.
  *
- * Reads the progress record rather than the mirrored streak hash, because the
- * mirror stores only the streak number and not the date it was earned — so it
- * cannot tell a real 5-day streak from a 5-day streak abandoned last month.
- * That is exactly how lapsed students ended up displaying streaks they no
- * longer had, and out-ranking active ones on the streak tiebreak.
+ * The streak comes from the progress record rather than the mirrored hash,
+ * because the mirror holds the number without the date it was earned and so
+ * can't tell a live streak from an abandoned one. Only ever called for the
+ * handful of rows actually displayed.
  */
-async function readStanding(normalizedEmail: string, todayStr: string): Promise<{ points: number; streak: number }> {
+async function decorate(email: string, todayStr: string): Promise<{ displayName: string; streak: number }> {
   try {
-    const progress = await getProgress(normalizedEmail, todayStr);
-    return { points: Number(progress.points) || 0, streak: Number(progress.currentStreak) || 0 };
+    const [account, progress] = await Promise.all([getAccountByEmail(email), getProgress(email, todayStr)]);
+    return {
+      displayName: String(account?.displayName ?? '').trim() || 'Someone',
+      streak: Number(progress.currentStreak) || 0,
+    };
   } catch {
-    return { points: 0, streak: 0 };
+    return { displayName: 'Someone', streak: 0 };
   }
 }
 
-/**
- * Ranks entries highest-first, breaking ties on streak then name.
- *
- * String() rather than trusting the stored value: a display name that happened
- * to be all digits came back from Redis as a number once and took the whole
- * board down on localeCompare.
- */
-function rank(entries: LeaderboardEntry[]): LeaderboardEntry[] {
-  return entries.sort(
-    (a, b) => b.points - a.points || b.streak - a.streak || String(a.displayName).localeCompare(String(b.displayName))
-  );
+async function buildBoard(key: string, viewerEmail: string | null, todayStr: string): Promise<Board> {
+  if (!isRedisConfigured()) {
+    return { top: [], you: null, youAreUnranked: false, total: 0 };
+  }
+
+  const redis = getRedis();
+  let flat: (string | number)[] = [];
+  let total = 0;
+
+  try {
+    [flat, total] = await Promise.all([
+      redis.zrange<(string | number)[]>(key, 0, BOARD_SIZE - 1, { rev: true, withScores: true }),
+      redis.zcard(key),
+    ]);
+  } catch (error) {
+    console.error('leaderboard: could not read', key, error);
+    return { top: [], you: null, youAreUnranked: false, total: 0 };
+  }
+
+  const ranked = pairUp(flat);
+  const decorated = await Promise.all(ranked.map((r) => decorate(r.email, todayStr)));
+
+  const top: BoardEntry[] = ranked.map((r, i) => ({
+    rank: i + 1,
+    displayName: decorated[i].displayName,
+    points: r.score,
+    streak: decorated[i].streak,
+    isYou: viewerEmail !== null && r.email === viewerEmail,
+  }));
+
+  if (!viewerEmail || top.some((e) => e.isYou)) {
+    return { top, you: null, youAreUnranked: false, total };
+  }
+
+  // Outside the top: two cheap lookups rather than ranking the whole set.
+  try {
+    const [rank, score] = await Promise.all([
+      redis.zrevrank(key, viewerEmail),
+      redis.zscore(key, viewerEmail),
+    ]);
+
+    if (rank === null || rank === undefined || score === null || score === undefined) {
+      return { top, you: null, youAreUnranked: true, total };
+    }
+
+    const mine = await decorate(viewerEmail, todayStr);
+    return {
+      top,
+      you: { rank: Number(rank) + 1, displayName: mine.displayName, points: Number(score) || 0, streak: mine.streak, isYou: true },
+      youAreUnranked: false,
+      total,
+    };
+  } catch (error) {
+    console.error('leaderboard: could not read own rank', error);
+    return { top, you: null, youAreUnranked: true, total };
+  }
+}
+
+/** All-time points. */
+export async function getAllTimeBoard(viewerEmail: string | null, now: Date = new Date()): Promise<Board> {
+  return buildBoard(KEYS.leaderboardStreaks, viewerEmail, getUtcDateString(now));
 }
 
 /**
- * The all-time board.
+ * This week's board, which empties every Sunday at 05:30 IST.
  *
- * Built from the *account list* rather than from the scores, so every student
- * who has signed up appears from the moment they register — a batch board is
- * only useful if the whole batch is on it, including everyone still at zero.
- * Emails are used to join the two, but never returned: viewers see names only.
+ * The reset is what makes it worth checking: on a lifetime total, whoever
+ * started first and never missed is permanently top, and everyone else stops
+ * looking. A weekly period gives someone who joined yesterday a winnable race.
  */
-export async function getFullLeaderboard(): Promise<LeaderboardEntry[]> {
-  if (!isRedisConfigured()) return [];
-
-  const accounts = await listAllAccounts();
-  if (accounts.length === 0) return [];
-
-  const todayStr = getUtcDateString();
-  const scores = await Promise.all(accounts.map((account) => readStanding(account.email, todayStr)));
-
-  return rank(
-    accounts.map((account, i) => ({
-      displayName: String(account.displayName ?? ''),
-      points: scores[i].points,
-      streak: scores[i].streak,
-      isZero: scores[i].points === 0,
-    }))
-  );
-}
-
-/**
- * This week's board, which empties every Sunday at 5:30 AM IST.
- *
- * The reset is what makes the board worth checking: on a lifetime total,
- * whoever started first and never missed a day is permanently top, and everyone
- * else stops looking by week three. A weekly period gives all 60 students a
- * winnable race every seven days, and someone who joins late is only ever a few
- * days behind rather than a term behind.
- */
-export async function getWeeklyLeaderboard(now: Date = new Date()): Promise<WeeklyBoard> {
+export async function getWeeklyBoard(viewerEmail: string | null, now: Date = new Date()): Promise<WeeklyBoard> {
   const today = getUtcDateString(now);
   const weekStart = getWeekStart(today);
-  const meta = { weekStart, resetAt: getWeekResetAt(today).toISOString() };
-
-  if (!isRedisConfigured()) return { entries: [], ...meta };
-
-  const accounts = await listAllAccounts();
-  if (accounts.length === 0) return { entries: [], ...meta };
-
-  let weeklyPoints = new Map<string, number>();
-  try {
-    // One range read for the whole week rather than a score lookup per student.
-    const flat = await getRedis().zrange<(string | number)[]>(KEYS.leaderboardWeekly(weekStart), 0, -1, {
-      withScores: true,
-    });
-    weeklyPoints = new Map(
-      Array.from({ length: Math.floor(flat.length / 2) }, (_, i) => [
-        String(flat[i * 2]),
-        Number(flat[i * 2 + 1]) || 0,
-      ])
-    );
-  } catch (error) {
-    console.error('leaderboard: weekly read failed', error);
-  }
-
-  const streaks = await Promise.all(accounts.map((account) => readStanding(account.email, today)));
-
-  const entries = rank(
-    accounts.map((account, i) => {
-      const points = weeklyPoints.get(account.email) ?? 0;
-      return {
-        displayName: String(account.displayName ?? ''),
-        points,
-        streak: streaks[i].streak,
-        isZero: points === 0,
-      };
-    })
-  );
-
-  return { entries, ...meta };
+  const board = await buildBoard(KEYS.leaderboardWeekly(weekStart), viewerEmail, today);
+  return { ...board, weekStart, resetAt: getWeekResetAt(today).toISOString() };
 }
